@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pumpkin Parlor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Outfit:wght@300;400;500&display=swap">
+<style>
+  /* Layout: one rounded card filling the window; the 3D stage on top, a ruled control bar below (stacks on phones) */
+  :root {
+    --page: #140c1d;
+    --card: #1b1227;
+    --line: rgba(214, 190, 255, .12);
+    --line-strong: rgba(214, 190, 255, .22);
+    --ink: #f6eadb;
+    --muted: #a898bb;
+    --accent: #f7a35c;
+    --accent-ink: #2a1408;
+    --picked: rgba(247, 163, 92, .14);
+    --track: #3a2a50;
+    --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+    --body: "Outfit", "Avenir Next", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--body); padding: 16px; }
+  .card {
+    height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto;
+    background: var(--card); border: 1px solid var(--line); border-radius: 28px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+  }
+  .stage { position: relative; min-height: 0; }
+  #stage { position: absolute; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #stage.carving canvas { cursor: crosshair; }
+  .eyebrow { margin: 0; font-size: .72rem; font-weight: 400; letter-spacing: .38em; text-transform: uppercase; color: var(--muted); }
+  .masthead { position: absolute; top: 28px; left: 40px; pointer-events: none; display: flex; flex-direction: column; gap: 6px; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 3rem; line-height: 1; letter-spacing: .005em; color: var(--ink); }
+  .masthead .sub { color: var(--ink); opacity: .85; }
+  .masthead .tag { margin-top: 44px; }
+  .moon { position: absolute; top: 34px; right: 40px; width: 46px; height: 46px; color: #f8e6c8; filter: drop-shadow(0 0 10px rgba(255,230,190,.35)); pointer-events: none; }
+  .hint { position: absolute; left: 0; right: 0; bottom: 18px; margin: 0; text-align: center; font-size: .95rem; letter-spacing: .14em; color: var(--muted); pointer-events: none; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+
+  .bar { border-top: 1px solid var(--line-strong); padding: 26px 40px 28px; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 22px 40px; }
+  .pick { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .moods { display: grid; grid-template-columns: repeat(5, 8.6rem); gap: 10px; }
+  .btn {
+    font: 400 1.05rem var(--body); color: var(--ink); background: transparent;
+    border: 1px solid var(--line-strong); border-radius: 12px; padding: 13px 18px; cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  .btn:hover { border-color: rgba(247,163,92,.55); }
+  .btn:focus-visible, input[type=range]:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .moods .btn[aria-pressed="true"] { background: var(--picked); border-color: var(--accent); color: var(--accent); }
+  .status { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; color: var(--muted); font-size: .98rem; letter-spacing: .04em; }
+  .link { font: inherit; font-size: .88rem; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+  .link:hover { color: var(--ink); }
+
+  .tools { width: 27rem; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
+  .width-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.05rem; }
+  .width-head output { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .92rem; margin-top: -2px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; cursor: pointer; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 6px; background: linear-gradient(to right, var(--accent) var(--fill, 30%), var(--track) var(--fill, 30%)); }
+  input[type=range]::-moz-range-track { height: 10px; border-radius: 6px; background: var(--track); }
+  input[type=range]::-moz-range-progress { height: 10px; border-radius: 6px; background: var(--accent); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -8px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; box-shadow: 0 0 12px rgba(247,163,92,.6); }
+  input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; }
+  .actions { display: flex; justify-content: flex-end; gap: 14px; margin-top: 12px; }
+  .actions .btn { min-width: 9.5rem; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; min-width: 12rem; }
+  .btn.primary:hover { background: #ffb575; }
+  .btn.primary[aria-pressed="true"] { background: transparent; color: var(--accent); }
+
+  #fail { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); }
+
+  @media (max-width: 1180px) { .moods { grid-template-columns: repeat(3, minmax(0, 8.6rem)); } }
+  @media (max-width: 700px) {
+    body { padding: 10px; }
+    .card { border-radius: 20px; }
+    .masthead { top: 18px; left: 20px; gap: 4px; }
+    h1 { font-size: 2.1rem; }
+    .eyebrow { font-size: .6rem; letter-spacing: .3em; }
+    .masthead .tag { display: none; }
+    .moon { top: 20px; right: 20px; width: 32px; height: 32px; }
+    .hint { bottom: 10px; font-size: .82rem; }
+    .bar { padding: 16px 18px 18px; gap: 14px; }
+    .pick { gap: 10px; width: 100%; }
+    .moods { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+    .moods .btn { padding: 10px 2px; font-size: .8rem; border-radius: 10px; }
+    .tools { width: 100%; gap: 6px; }
+    .actions { margin-top: 6px; }
+    .actions .btn { flex: 1; min-width: 0; padding: 11px 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+</head><body>
+
+<main class="card">
+  <section class="stage">
+    <div id="stage"></div>
+    <div class="masthead">
+      <h1>Pumpkin Parlor</h1>
+      <p class="eyebrow sub">A little Halloween ritual</p>
+      <p class="eyebrow tag">Carve a little personality</p>
+    </div>
+    <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><path fill="currentColor" d="M30 6 A19 19 0 1 0 43 34 A16 16 0 1 1 30 6z"/></svg>
+    <p class="hint" id="hint">Drag to turn your pumpkin</p>
+  </section>
+
+  <section class="bar">
+    <div class="pick">
+      <p class="eyebrow">Pick a personality</p>
+      <div class="moods" role="group" aria-label="Personality">
+        <button class="btn" data-face="blank" aria-pressed="true">Blank</button>
+        <button class="btn" data-face="happy" aria-pressed="false">Happy</button>
+        <button class="btn" data-face="scary" aria-pressed="false">Spooky</button>
+        <button class="btn" data-face="surprised" aria-pressed="false">Surprised</button>
+        <button class="btn" data-face="sleepy" aria-pressed="false">Sleepy</button>
+      </div>
+      <p class="status"><span id="status">Your blank pumpkin is ready for your own design.</span>
+        <span><button class="link" id="undo">Undo</button> · <button class="link" id="newPumpkin">Start over</button></span></p>
+    </div>
+    <div class="tools">
+      <label class="width-head" for="knifeSize"><span>Carving width</span><output id="sizeOut" for="knifeSize">10 px</output></label>
+      <input type="range" id="knifeSize" min="4" max="30" value="10">
+      <div class="ends" aria-hidden="true"><span>Thin</span><span>Wide</span></div>
+      <div class="actions">
+        <button class="btn" id="candle" aria-pressed="true">Candle on</button>
+        <button class="btn primary" id="carveBtn" aria-pressed="false">Carve pumpkin</button>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="fail" hidden>Your browser can't show 3D graphics here. Try a recent Chrome, Safari or Firefox.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+  catch (e) { document.getElementById('fail').hidden = false; return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+
+  // ---------- scene ----------
+  const scene = new THREE.Scene();
+  scene.background = (() => { // soft violet glow behind the pumpkin
+    const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+    const g = x.createRadialGradient(256, 230, 10, 256, 260, 360);
+    g.addColorStop(0, '#6a4070'); g.addColorStop(0.2, '#4b2c74'); g.addColorStop(0.5, '#2e1c48'); g.addColorStop(1, '#1b1227');
+    x.fillStyle = g; x.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 26; i++) {
+      const bx = 60 + Math.random() * 392, by = 60 + Math.random() * 340, br = 1 + Math.random() * 2.5;
+      x.fillStyle = `rgba(${Math.random() < .6 ? '190,150,255' : '255,210,150'},${0.25 + Math.random() * 0.4})`;
+      x.beginPath(); x.arc(bx, by, br, 0, Math.PI * 2); x.fill();
+    }
+    return new THREE.CanvasTexture(c);
+  })();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+  camera.position.set(0, 0.55, 5.2);
+
+  scene.add(new THREE.HemisphereLight(0xc8a6e0, 0x3a2418, 0.45));
+  const key = new THREE.DirectionalLight(0xffbf78, 0.85); key.position.set(2.5, 3, 4); scene.add(key);
+  const halo = new THREE.PointLight(0xffc34a, 1.4, 4, 2); halo.position.set(0.4, 1.4, -1.6); scene.add(halo); // golden backlight
+  const floorGlow = new THREE.PointLight(0xffb040, 0.7, 2.6, 2); floorGlow.position.set(0, -0.1, 1.7); scene.add(floorGlow); // warm pool on the pedestal
+  const warm = new THREE.PointLight(0xffa048, 0.8, 6, 2); warm.position.set(-1.2, 0.6, 2.2); scene.add(warm);
+  const rimL = new THREE.DirectionalLight(0x9b7bff, 0.6); rimL.position.set(-4, 2, -3); scene.add(rimL);
+  const rimR = new THREE.DirectionalLight(0xc79bff, 0.55); rimR.position.set(4, 1.5, -3); scene.add(rimR);
+
+  const GROUND = -0.7;
+  const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x22162f, roughness: 0.92, metalness: 0 });
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.36, 0.18, 96), pedestalMat);
+  pedestal.position.y = GROUND - 0.09; scene.add(pedestal);
+  const rimRing = new THREE.Mesh(new THREE.TorusGeometry(1.322, 0.01, 8, 128), new THREE.MeshBasicMaterial({ color: 0x4e3870 }));
+  rimRing.rotation.x = Math.PI / 2; rimRing.position.y = GROUND; scene.add(rimRing);
+
+  // ---------- carving textures (2:1, u around the pumpkin, v top to bottom) ----------
+  const W = 2048, H = 1024;
+  // carving maps run at half resolution (drawn in full-size coordinates) so each texture upload stays cheap
+  const mkCanvas = (k = 1) => { const c = document.createElement('canvas'); c.width = W * k; c.height = H * k; const x = c.getContext('2d'); x.scale(k, k); return [c, x]; };
+  const [colorC, colorX] = mkCanvas(), [alphaC, alphaX] = mkCanvas(0.5), [emitC, emitX] = mkCanvas(0.5);
+  const colorTex = new THREE.CanvasTexture(colorC), alphaTex = new THREE.CanvasTexture(alphaC), emitTex = new THREE.CanvasTexture(emitC);
+  [colorTex, alphaTex, emitTex].forEach(t => t.anisotropy = 4);
+
+  // painterly skin, painted once: thick palette-knife daubs in oranges and golds, with olive, rose and mauve accents
+  const [baseC, baseX] = mkCanvas();
+  (() => {
+    const x = baseX, g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#6a5222'); g.addColorStop(0.12, '#bf5a1c'); g.addColorStop(0.55, '#cc611d'); g.addColorStop(0.9, '#a3401a'); g.addColorStop(1, '#6e2a14');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    for (let k = 0; k < 10; k++) { // each lobe catches light down its middle
+      const cx = (k + 0.5) / 10 * W, gg = x.createLinearGradient(cx - 0.05 * W, 0, cx + 0.05 * W, 0);
+      gg.addColorStop(0, 'rgba(240,130,50,0)'); gg.addColorStop(0.5, 'rgba(240,130,50,.22)'); gg.addColorStop(1, 'rgba(240,130,50,0)');
+      x.fillStyle = gg; x.fillRect(cx - 0.05 * W, H * 0.1, 0.1 * W, H * 0.8);
+    }
+    const PAL = [['#d9661e', 26], ['#e57a26', 18], ['#c4501a', 20], ['#a8401a', 12], ['#eb8f36', 6], ['#8a8a40', 6], ['#6f7a3c', 4], ['#9a5a7a', 4], ['#b84a2a', 6]];
+    const total = PAL.reduce((a, p) => a + p[1], 0);
+    const pick = () => { let r = Math.random() * total; for (const [c, w] of PAL) { if ((r -= w) < 0) return c; } return PAL[0][0]; };
+    function daub(px, py, w, h, rot) {
+      x.save(); x.translate(px, py); x.rotate(rot); x.beginPath();
+      for (let i = 0; i < 9; i++) { const t = i / 9 * Math.PI * 2, k = 0.75 + Math.random() * 0.4; x[i ? 'lineTo' : 'moveTo'](Math.cos(t) * w * k, Math.sin(t) * h * k); }
+      x.closePath(); x.fill(); x.restore();
+    }
+    for (let i = 0; i < 7000; i++) {
+      const py = Math.random() * H, px = Math.random() * W, lat = Math.max(0.25, Math.sin(py / H * Math.PI));
+      const w = (16 + Math.random() * 46) / lat, h = 9 + Math.random() * 22, rot = (Math.random() - 0.5) * 1.6;
+      x.globalAlpha = 0.3 + Math.random() * 0.45; x.fillStyle = pick();
+      daub(px, py, w, h, rot);
+      if (px < w) daub(px + W, py, w, h, rot); else if (px > W - w) daub(px - W, py, w, h, rot);
+    }
+    x.globalAlpha = 1;
+    for (let k = 0; k <= 10; k++) { // shadowed creases between the lobes (u = k/10)
+      const gx = k / 10 * W, gg = x.createLinearGradient(gx - 36, 0, gx + 36, 0);
+      gg.addColorStop(0, 'rgba(100,32,18,0)'); gg.addColorStop(0.5, 'rgba(100,32,18,.6)'); gg.addColorStop(1, 'rgba(100,32,18,0)');
+      x.fillStyle = gg; x.fillRect(gx - 36, 0, 72, H);
+    }
+    const top = x.createLinearGradient(0, 0, 0, H * 0.16); // olive around the stem
+    top.addColorStop(0, 'rgba(90,92,40,.9)'); top.addColorStop(1, 'rgba(90,92,40,0)');
+    x.fillStyle = top; x.fillRect(0, 0, W, H * 0.16);
+  })();
+  colorX.drawImage(baseC, 0, 0); // the skin never changes; cuts only touch the alpha and glow maps
+  function paintBase() {
+    alphaX.fillStyle = '#fff'; alphaX.fillRect(0, 0, W, H);
+    emitX.fillStyle = '#000'; emitX.fillRect(0, 0, W, H);
+  }
+
+  // carve one shape into all three maps; pathFn traces it on a context
+  // face shapes: glowing rim drawn once with a blur (slow, but only a handful per face)
+  function carveShape(pathFn, ring = 14) {
+    emitX.save(); emitX.fillStyle = emitX.strokeStyle = '#a85418'; emitX.lineWidth = ring * 2; emitX.lineJoin = 'round';
+    emitX.shadowColor = '#c85a08'; emitX.shadowBlur = 22;
+    pathFn(emitX); emitX.stroke(); emitX.fill(); emitX.restore();
+    alphaX.fillStyle = '#000'; pathFn(alphaX); alphaX.fill();
+  }
+  // brush dabs: a pre-rendered soft glow sprite instead of a live blur
+  const glowDab = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(190,96,30,1)'); g.addColorStop(0.45, 'rgba(168,84,24,.9)'); g.addColorStop(1, 'rgba(120,45,5,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c; })();
+  function dab(x, y, rx, ry) {
+    emitX.drawImage(glowDab, x - rx * 2.2, y - ry * 2.2, rx * 4.4, ry * 4.4);
+    alphaX.beginPath(); alphaX.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); alphaX.fill();
+  }
+  const ellipsePath = (x, y, rx, ry) => c => { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); };
+  const polyPath = pts => c => { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); };
+
+  function stamp(x, y, r) { // brush dab, widened near the top so it stays round on the surface
+    const lat = Math.max(0.3, Math.sin(y / H * Math.PI)), rx = r / lat;
+    alphaX.fillStyle = '#000';
+    dab(x, y, rx, r);
+    if (x - rx * 2.2 < 0) dab(x + W, y, rx, r);
+    if (x + rx * 2.2 > W) dab(x - W, y, rx, r);
+    carvedArea += Math.PI * rx * r;
+  }
+
+  // ---------- faces (drawn in a 600px sketch space, mapped to the front of the pumpkin) ----------
+  const s = 1.7, F = ([x, y]) => [0.25 * W + (x - 300) * s, 0.47 * H + (y - 350) * s];
+  const ell = (x, y, a, b, n = 40) => Array.from({ length: n }, (_, i) => { const t = i / n * Math.PI * 2; return [x + a * Math.cos(t), y + b * Math.sin(t)]; });
+  const quad = (p0, c, p1, n = 20) => Array.from({ length: n + 1 }, (_, i) => { const t = i / n, u = 1 - t; return [u*u*p0[0] + 2*u*t*c[0] + t*t*p1[0], u*u*p0[1] + 2*u*t*c[1] + t*t*p1[1]]; });
+  const crescent = (x1, x2, y, top, bot) => { const m = (x1 + x2) / 2; return [...quad([x1, y], [m, y + top], [x2, y]), ...quad([x2, y], [m, y + bot], [x1, y])]; };
+  const P = pts => ({ t: 'poly', pts: pts.map(F) });
+  const FACES = {
+    happy: [
+      P([[205,320],[245,245],[285,320]]), P([[315,320],[355,245],[395,320]]),
+      P([[284,362],[300,335],[316,362]]),
+      P([[180,385],[215,392],[225,375],[245,398],[300,402],[355,398],[375,375],[385,392],[420,385], ...quad([420,385],[300,540],[180,385]).slice(1)]),
+    ],
+    scary: [
+      P([[185,262],[285,302],[205,325]]), P([[415,262],[315,302],[395,325]]),
+      P([[290,365],[300,340],[310,365]]),
+      P([[165,392],[200,412],[225,392],[255,418],[285,394],[315,418],[345,394],[375,418],[400,392],[435,392], ...quad([435,392],[300,520],[165,392]).slice(1)]),
+    ],
+    surprised: [
+      P(ell(235, 285, 34, 40)), P(ell(365, 285, 34, 40)),
+      P(ell(300, 350, 10, 12, 16)),
+      P(ell(300, 425, 40, 50)),
+    ],
+    wink: [
+      { t: 'dabs', r: 15, pts: quad([200,295],[240,262],[280,295], 24).map(F) },
+      P(ell(360, 285, 32, 36)),
+      P([[290,360],[300,340],[310,360]]),
+      P(crescent(200, 420, 395, 20, 100).map(([x, y]) => [x, y - (x - 200) * 0.12])),
+    ],
+    sleepy: [
+      { t: 'dabs', r: 12, pts: quad([205,292],[245,322],[285,292], 24).map(F) },
+      { t: 'dabs', r: 12, pts: quad([315,292],[355,322],[395,292], 24).map(F) },
+      P(ell(300, 410, 26, 20)),
+    ],
+    cheery: [
+      { t: 'dabs', r: 14, pts: quad([205,305],[245,262],[285,305], 24).map(F) },
+      { t: 'dabs', r: 14, pts: quad([315,305],[355,262],[395,305], 24).map(F) },
+      P(crescent(215, 385, 385, 25, 120)),
+    ],
+    blank: [],
+  };
+
+  // ---------- history ----------
+  let items = [], carvedArea = 0, texDirty = true;
+  function applyItem(it) {
+    if (it.t === 'poly') {
+      carveShape(polyPath(it.pts));
+      let a = 0; it.pts.forEach(([x, y], i) => { const [x2, y2] = it.pts[(i + 1) % it.pts.length]; a += x * y2 - x2 * y; });
+      carvedArea += Math.abs(a) / 2;
+    } else it.pts.forEach(([x, y, r]) => stamp(x, y, r || it.r));
+  }
+  function redraw() { carvedArea = 0; paintBase(); items.forEach(applyItem); texDirty = true; }
+
+  // ---------- pumpkin ----------
+  function pumpkinGeometry(scale, ws = 160, hs = 100) {
+    const geo = new THREE.SphereGeometry(1, ws, hs), p = geo.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i);
+      const a = Math.atan2(v.z, v.x);
+      const depth = 0.18 * (1 + 0.3 * Math.sin(2 * a + 0.4)); // some creases deeper than others
+      const rib = 1 - depth + depth * Math.pow(Math.abs(Math.sin(5 * a)), 0.45); // fat lobes, sharp deep creases
+      const wob = 1 + 0.07 * Math.sin(a + 0.7) + 0.035 * Math.sin(2 * a + 2.1) + 0.025 * Math.sin(3 * a + 1.3); // lopsided: one side fuller
+      const bulge = 1 + 0.07 * (1 - v.y * v.y) - 0.03 * v.y; // squat, fuller below the middle
+      v.x *= rib * wob * bulge * 1.1; v.z *= rib * wob * bulge * 1.1; v.y *= 0.92 * (1 + 0.06 * Math.sin(a - 0.5)); // taller on one side
+      v.x += 0.05 * v.y; // slight lean
+      const rxz = Math.hypot(v.x, v.z);
+      v.y -= v.y > 0 ? 0.3 * Math.exp(-rxz * rxz / 0.16) : -0.16 * Math.exp(-rxz * rxz / 0.1); // deep stem well, flat-ish base
+      v.multiplyScalar(scale);
+      p.setXYZ(i, v.x, v.y, v.z);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+  const pumpkin = new THREE.Group(); pumpkin.position.y = GROUND + 0.74; scene.add(pumpkin);
+  const shellMat = new THREE.MeshStandardMaterial({
+    map: colorTex, alphaMap: alphaTex, alphaTest: 0.5, emissiveMap: emitTex, emissive: 0xffffff, emissiveIntensity: 1,
+    roughness: 0.55, metalness: 0,
+  });
+  const shell = new THREE.Mesh(pumpkinGeometry(1), shellMat); pumpkin.add(shell);
+  // personality guide: dashed lines painted on a transparent skin just above the pumpkin
+  const [guideC, guideX] = mkCanvas(0.5), guideTex = new THREE.CanvasTexture(guideC);
+  const guide = new THREE.Mesh(pumpkinGeometry(1.004), new THREE.MeshBasicMaterial({ map: guideTex, transparent: true, depthWrite: false }));
+  pumpkin.add(guide);
+  const hitProxy = new THREE.Mesh(pumpkinGeometry(1, 64, 40), new THREE.MeshBasicMaterial({ visible: false })); pumpkin.add(hitProxy); // cheap to raycast
+  const innerMat = new THREE.MeshStandardMaterial({ color: 0xf0a050, emissive: 0x401400, roughness: 0.9, side: THREE.BackSide });
+  const inner = new THREE.Mesh(pumpkinGeometry(0.82), innerMat); pumpkin.add(inner);
+  // thick wall: stacked flesh layers between the skin and the hollow, all cut by the same carving mask
+  const wallGeo = [], wallMats = [];
+  for (let i = 0; i < 16; i++) {
+    const t = (i + 1) / 16, k = 0.975 - 0.155 * i / 15;
+    const m = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.09 - 0.015 * t, 0.85, 0.66 - 0.12 * t), roughness: 0.85,
+      alphaMap: alphaTex, alphaTest: 0.5, emissive: 0xff8a20, emissiveIntensity: 0 });
+    m.userData.depth = t; wallMats.push(m);
+    pumpkin.add(new THREE.Mesh(pumpkinGeometry(k), m));
+  }
+
+  // curly stem, tendrils and leaves
+  function taperedTube(points, r0, r1, flare = 0, seg = 120, radial = 16) {
+    const curve = new THREE.CatmullRomCurve3(points), geo = new THREE.TubeGeometry(curve, seg, 1, radial, false);
+    const p = geo.attributes.position, c = new THREE.Vector3(), v = new THREE.Vector3();
+    for (let i = 0; i <= seg; i++) {
+      const t = i / seg, r = r1 + (r0 - r1) * Math.pow(1 - t, 0.8) + flare * Math.exp(-t * 16); curve.getPointAt(t, c);
+      for (let k = 0; k <= radial; k++) {
+        const n = i * (radial + 1) + k, ridge = 1 + 0.07 * Math.cos(k / radial * Math.PI * 12 + t * 10); // fibrous ridges that twist
+        v.fromBufferAttribute(p, n).sub(c).multiplyScalar(r * ridge).add(c); p.setXYZ(n, v.x, v.y, v.z);
+      }
+    }
+    geo.computeVertexNormals(); return geo;
+  }
+  const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
+  const barkTex = (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 128; const x = c.getContext('2d');
+    x.fillStyle = '#5a4a22'; x.fillRect(0, 0, 512, 128);
+    const cols = ['#6f7d38', '#8a9a48', '#4a3518', '#7a5a2a', '#c0a060', '#2e2410', '#5f6e30'];
+    for (let i = 0; i < 340; i++) {
+      x.strokeStyle = cols[(Math.random() * cols.length) | 0]; x.globalAlpha = 0.45 + Math.random() * 0.45; x.lineWidth = 2 + Math.random() * 10; x.lineCap = 'round';
+      const sx = Math.random() * 600 - 60, len = 40 + Math.random() * 120; x.beginPath(); x.moveTo(sx, Math.random() * 128); x.lineTo(sx + len, Math.random() * 128 * 0.3 + 40); x.stroke();
+    }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 1); return t;
+  })();
+  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.8 });
+  pumpkin.add(new THREE.Mesh(taperedTube([V(0, 0.52), V(0.03, 0.82), V(-0.02, 1.05), V(-0.14, 1.25), V(-0.34, 1.34), V(-0.52, 1.25), V(-0.56, 1.07),
+    V(-0.45, 0.95), V(-0.32, 0.99), V(-0.3, 1.11), V(-0.38, 1.16), V(-0.44, 1.1)], 0.17, 0.016, 0.08), barkMat));
+  function curl(start, end, turns, r, dir = 1) {
+    const pts = [start, start.clone().lerp(end, 0.5).add(V(0, 0.05))];
+    for (let i = 0; i <= 30; i++) { const t = i / 30, a = t * turns * Math.PI * 2, rr = r * (1 - t * 0.75); pts.push(V(end.x + dir * (Math.cos(a) * rr - r), end.y + Math.sin(a) * rr, end.z)); }
+    return pts;
+  }
+  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(0.1, 0.68, 0.06), V(0.42, 1.05, 0.1), 1.4, 0.075), 0.026, 0.008), barkMat));
+  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(-0.08, 0.66, -0.1), V(-0.24, 0.95, -0.36), 1.1, 0.055, -1), 0.02, 0.006), barkMat));
+
+  // leaves: lobed blades draped over the pumpkin's shoulder (each vertex sits just above the surface)
+  const leafTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#6f8236'); g.addColorStop(1, '#a3b04c');
+    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 220; i++) { x.fillStyle = ['#a0ac4c', '#4e5e26', '#7a8a38', '#b8b058'][i % 4]; x.globalAlpha = 0.25 + Math.random() * 0.3;
+      x.beginPath(); x.ellipse(Math.random() * 256, Math.random() * 256, 6 + Math.random() * 14, 4 + Math.random() * 8, Math.random() * 3, 0, Math.PI * 2); x.fill(); }
+    x.globalAlpha = 0.8; x.strokeStyle = '#c9c47a'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(128, 0); x.lineTo(128, 256); x.stroke(); x.lineWidth = 1.6;
+    for (let v = 30; v < 240; v += 38) { x.beginPath(); x.moveTo(128, v); x.lineTo(30, v + 40); x.moveTo(128, v); x.lineTo(226, v + 40); x.stroke(); }
+    return new THREE.CanvasTexture(c);
+  })();
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, roughness: 0.75, side: THREE.DoubleSide });
+  pumpkin.updateMatrixWorld(true);
+  const down = new THREE.Raycaster(), from = new THREE.Vector3(), DOWN = V(0, -1, 0);
+  function surfaceY(lx, lz) { // pumpkin-local height of the skin at (lx, lz)
+    from.set(lx, 3, lz); pumpkin.localToWorld(from);
+    down.set(from, DOWN); const h = down.intersectObject(hitProxy)[0];
+    return h ? pumpkin.worldToLocal(h.point.clone()).y : 0.5;
+  }
+  for (let k = 0; k < 5; k++) {
+    const phi = k * Math.PI * 2 / 5 + Math.random() * 0.5, L = 0.6 + Math.random() * 0.2;
+    const dir = V(Math.cos(phi), 0, Math.sin(phi)), side = V(-dir.z, 0, dir.x);
+    const g = new THREE.PlaneGeometry(1, 1, 10, 16), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i), t = p.getY(i) + 0.5;
+      const w = 0.42 * L * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.05)), 0.7) * (0.82 + 0.18 * Math.abs(Math.cos(t * Math.PI * 3)));
+      const pos = dir.clone().multiplyScalar(0.06 + t * L).addScaledVector(side, u * w);
+      const y = surfaceY(pos.x, pos.z) + 0.018 + 0.05 * Math.sin(Math.PI * t) + Math.abs(u) * w * 0.35;
+      p.setXYZ(i, pos.x, y, pos.z);
+    }
+    g.computeVertexNormals();
+    pumpkin.add(new THREE.Mesh(g, leafMat));
+  }
+
+  // candle + flame inside
+  const candleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.22, 20), new THREE.MeshStandardMaterial({ color: 0xf3e6c8, emissive: 0x553311, roughness: 0.6 }));
+  candleMesh.position.y = -0.5; pumpkin.add(candleMesh);
+  const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, '#fff'); g.addColorStop(0.35, 'rgba(255,255,255,.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: 0xff9a30, opacity: 0.75, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  flame.position.y = -0.3; flame.scale.set(0.16, 0.3, 1); pumpkin.add(flame);
+  const innerLight = new THREE.PointLight(0xffa040, 2.2, 1.6, 2); innerLight.position.y = -0.2; pumpkin.add(innerLight);
+  const spill = new THREE.PointLight(0xff9a30, 0, 7, 2); spill.position.set(0, 0.1, 0.4); pumpkin.add(spill);
+
+  // ---------- particles ----------
+  function makeSystem(n, size, opacity) {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(n * 3).fill(-99), col = new Float32Array(n * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const mat = new THREE.PointsMaterial({ size, map: dot, vertexColors: true, transparent: true, opacity, depthWrite: false,
+      blending: THREE.AdditiveBlending });
+    const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; scene.add(pts);
+    return { n, pos, col, geo, vel: new Float32Array(n * 3), life: new Float32Array(n), max: new Float32Array(n), base: new Float32Array(n * 3), i: 0 };
+  }
+  const chunks = makeSystem(300, 0.035, 0.6), embers = makeSystem(300, 0.045, 0.7);
+  const FLESH = [[1, .78, .45], [.95, .55, .18], [1, .88, .65], [1, .96, .85]].map(c => new THREE.Color(...c));
+  function emit(sys, p, nrm, speed, color, life) {
+    const k = sys.i = (sys.i + 1) % sys.n, j = k * 3;
+    sys.pos[j] = p.x; sys.pos[j + 1] = p.y; sys.pos[j + 2] = p.z;
+    sys.vel[j] = nrm.x * speed + (Math.random() - .5) * speed;
+    sys.vel[j + 1] = nrm.y * speed + Math.random() * speed * 0.9;
+    sys.vel[j + 2] = nrm.z * speed + (Math.random() - .5) * speed;
+    sys.base[j] = color.r; sys.base[j + 1] = color.g; sys.base[j + 2] = color.b;
+    sys.col[j] = color.r; sys.col[j + 1] = color.g; sys.col[j + 2] = color.b;
+    sys.life[k] = sys.max[k] = life;
+  }
+  const EMBER = new THREE.Color(1, .7, .25);
+  function burst(p, nrm, amount) {
+    for (let i = 0; i < amount; i++) emit(chunks, p, nrm, 0.5 + Math.random() * 0.5, FLESH[(Math.random() * 4) | 0], 0.6 + Math.random() * 0.4);
+    for (let i = 0; i < amount; i++) emit(embers, p, nrm, 0.3 + Math.random() * 0.5, EMBER, 0.5 + Math.random() * 0.5);
+  }
+  function stepParticles(dt) {
+    for (let k = 0; k < chunks.n; k++) {
+      const j = k * 3; if (chunks.life[k] <= 0) continue;
+      chunks.life[k] -= dt;
+      if (chunks.life[k] <= 0) { chunks.pos[j + 1] = -99; continue; }
+      const f = chunks.life[k] / chunks.max[k];
+      chunks.col[j] = chunks.base[j] * f; chunks.col[j + 1] = chunks.base[j + 1] * f; chunks.col[j + 2] = chunks.base[j + 2] * f;
+      chunks.vel[j + 1] -= 4 * dt;
+      chunks.pos[j] += chunks.vel[j] * dt; chunks.pos[j + 1] += chunks.vel[j + 1] * dt; chunks.pos[j + 2] += chunks.vel[j + 2] * dt;
+      if (chunks.pos[j + 1] < GROUND + 0.03) { chunks.pos[j + 1] = GROUND + 0.03; chunks.vel[j + 1] *= -0.3; chunks.vel[j] *= 0.5; chunks.vel[j + 2] *= 0.5; }
+    }
+    for (let k = 0; k < embers.n; k++) {
+      const j = k * 3; if (embers.life[k] <= 0) continue;
+      embers.life[k] -= dt;
+      if (embers.life[k] <= 0) { embers.pos[j + 1] = -99; continue; }
+      embers.vel[j + 1] += 0.6 * dt; embers.vel[j] *= 0.97; embers.vel[j + 2] *= 0.97;
+      embers.pos[j] += embers.vel[j] * dt; embers.pos[j + 1] += embers.vel[j + 1] * dt; embers.pos[j + 2] += embers.vel[j + 2] * dt;
+      const f = embers.life[k] / embers.max[k];
+      embers.col[j] = embers.base[j] * f; embers.col[j + 1] = embers.base[j + 1] * f * f; embers.col[j + 2] = embers.base[j + 2] * f * f * f;
+    }
+    for (const sys of [chunks, embers]) { sys.geo.attributes.position.needsUpdate = true; sys.geo.attributes.color.needsUpdate = true; }
+  }
+
+  // ---------- ambient magic: dotted arcs, twinkling stars, drifting motes ----------
+  const starTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 22); g.addColorStop(0, 'rgba(255,240,200,.9)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); x.fillStyle = '#fff8e0';
+    x.beginPath(); x.moveTo(32, 2); x.quadraticCurveTo(35, 29, 62, 32); x.quadraticCurveTo(35, 35, 32, 62); x.quadraticCurveTo(29, 35, 2, 32); x.quadraticCurveTo(29, 29, 32, 2); x.fill();
+    return new THREE.CanvasTexture(c); })();
+  const magic = new THREE.Group(); magic.position.y = GROUND + 0.85; scene.add(magic);
+  const arcs = [[1.55, new THREE.Euler(0.35, 0, 0.25)], [1.75, new THREE.Euler(-0.25, 0.6, -0.3)]];
+  const arcPts = [];
+  for (const [R, tilt] of arcs) for (let i = 0; i < 220; i++) {
+    const a = i / 220 * Math.PI * 2; if (Math.sin(3 * a + R) < -0.2) continue;
+    arcPts.push(V(R * Math.cos(a), 0, R * Math.sin(a)).applyEuler(tilt));
+  }
+  magic.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(arcPts),
+    new THREE.PointsMaterial({ size: 0.022, map: dot, color: 0xffd27a, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false })));
+  const stars = [];
+  for (let i = 0; i < 9; i++) {
+    const st = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTex, color: 0xffdc8a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    st.position.copy(arcPts[(Math.random() * arcPts.length) | 0]); st.userData = { s: 0.07 + Math.random() * 0.07, ph: Math.random() * 6 };
+    magic.add(st); stars.push(st);
+  }
+  const moteGeo = new THREE.BufferGeometry(), moteN = 60, motePos = new Float32Array(moteN * 3);
+  for (let i = 0; i < moteN; i++) { motePos[i * 3] = (Math.random() - .5) * 6; motePos[i * 3 + 1] = GROUND + Math.random() * 3; motePos[i * 3 + 2] = (Math.random() - .5) * 5 - 0.5; }
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.04, map: dot, color: 0xc4a2ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+  scene.add(motes);
+  function stepMagic(dt, now) {
+    magic.rotation.y += dt * 0.12;
+    stars.forEach(st => { const k = st.userData.s * (0.6 + 0.4 * Math.sin(now / 400 + st.userData.ph)); st.scale.set(k, k, 1); });
+    for (let i = 0; i < moteN; i++) { motePos[i * 3 + 1] += dt * 0.08; if (motePos[i * 3 + 1] > GROUND + 3) motePos[i * 3 + 1] = GROUND; }
+    moteGeo.attributes.position.needsUpdate = true;
+  }
+
+  // ---------- controls + carving input ----------
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let mode = 'spin', brush = 10, stroke = null, last = null;
+  function hitAt(e) {
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    return ray.intersectObject(hitProxy)[0];
+  }
+  // brush pressure: starts thin, swells and thins with speed plus a gentle wobble, tapers at the end
+  function carveAt(hit, t) {
+    const x = hit.uv.x * W, y = (1 - hit.uv.y) * H;
+    let d = 0;
+    if (last && Math.abs(x - last[0]) < W / 4) {
+      d = Math.hypot(x - last[0], y - last[1]);
+      const speed = d / Math.max(8, t - stroke.t);
+      const target = Math.min(1.4, Math.max(0.35, 1.4 - speed * 0.25));
+      stroke.w += (target - stroke.w) * 0.3;
+    }
+    stroke.len += d; stroke.t = t;
+    const ramp = Math.min(1, 0.15 + stroke.len / 160);
+    const r = Math.max(1.5, brush * ramp * stroke.w * (0.85 + 0.25 * Math.sin(stroke.len / 45)));
+    const pts = [];
+    if (d) {
+      const lr = last[2], n = Math.ceil(d / (Math.min(r, lr) * 0.5));
+      for (let i = 1; i <= n; i++) pts.push([last[0] + (x - last[0]) * i / n, last[1] + (y - last[1]) * i / n, lr + (r - lr) * i / n]);
+    } else pts.push([x, y, r]);
+    pts.forEach(([a, b, rr]) => stamp(a, b, rr));
+    stroke.pts.push(...pts); last = [x, y, r]; texDirty = true;
+    const nrm = hit.face.normal.clone().transformDirection(hitProxy.matrixWorld);
+    burst(hit.point, nrm, Math.min(3, pts.length));
+  }
+  // registered before OrbitControls so it can claim the drag first
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (mode !== 'carve') return;
+    const hit = hitAt(e);
+    if (!hit) return;
+    controls.enabled = false;
+    renderer.domElement.setPointerCapture(e.pointerId);
+    stroke = { t: 'dabs', r: brush, pts: [], w: 1, len: 0, t: e.timeStamp }; items.push(stroke); last = null;
+    carveAt(hit, e.timeStamp);
+  });
+  let pending = null; // pointer moves are folded into one carve per frame
+  renderer.domElement.addEventListener('pointermove', e => { if (stroke) pending = { clientX: e.clientX, clientY: e.clientY, timeStamp: e.timeStamp }; });
+  function flushCarve() {
+    if (!pending || !stroke) return;
+    const e = pending; pending = null;
+    const hit = hitAt(e);
+    if (hit) carveAt(hit, e.timeStamp); else last = null;
+  }
+  const endStroke = () => {
+    flushCarve();
+    if (stroke && !stroke.pts.length) items.pop();
+    else if (stroke) { // taper the tail like a lifted brush
+      const p = stroke.pts, n = Math.min(14, p.length - 1);
+      for (let i = 0; i < n; i++) { const q = p[p.length - 1 - i]; q[2] = Math.max(1.5, q[2] * (0.2 + 0.8 * i / n)); }
+      redraw();
+    }
+    stroke = null; controls.enabled = true;
+  };
+  renderer.domElement.addEventListener('pointerup', endStroke);
+  renderer.domElement.addEventListener('pointercancel', endStroke);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, GROUND + 0.85, 0);
+  controls.enablePan = false; controls.enableDamping = true;
+  controls.minDistance = 3; controls.maxDistance = 8; controls.enableZoom = false; controls.maxPolarAngle = Math.PI / 2 - 0.08;
+  controls.update();
+
+  // ---------- post: bloom ----------
+  const composer = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), 0.95, 0.7, 0.78);
+  composer.addPass(bloom);
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); composer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.fov = w < h * 1.1 ? 52 : 36; // narrow stages: pull back so the pumpkin fits
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+
+  // ---------- buttons ----------
+  const $ = id => document.getElementById(id);
+  const NAMES = { blank: 'blank', happy: 'happy', scary: 'spooky', surprised: 'surprised', sleepy: 'sleepy' };
+  let face = 'blank';
+  function drawGuide() {
+    guideX.clearRect(0, 0, W, H);
+    guideX.save();
+    guideX.strokeStyle = 'rgba(255,236,205,.8)'; guideX.lineWidth = 6; guideX.setLineDash([16, 12]); guideX.lineJoin = guideX.lineCap = 'round';
+    guideX.shadowColor = 'rgba(40,10,0,.6)'; guideX.shadowBlur = 4;
+    for (const it of FACES[face]) {
+      guideX.beginPath(); it.pts.forEach(([x, y], i) => i ? guideX.lineTo(x, y) : guideX.moveTo(x, y));
+      if (it.t === 'poly') guideX.closePath();
+      guideX.stroke();
+    }
+    guideX.restore(); guideTex.needsUpdate = true;
+  }
+  const say = t => { $('status').textContent = t; };
+  function setMode(m) {
+    mode = m;
+    const carving = m === 'carve';
+    $('carveBtn').setAttribute('aria-pressed', carving);
+    $('carveBtn').textContent = carving ? 'Done carving' : 'Carve pumpkin';
+    stage.classList.toggle('carving', carving);
+    $('hint').textContent = carving ? (face === 'blank' ? 'Drag on the pumpkin to carve. Drag beside it to turn it.' : 'Trace the guide to carve. Drag beside the pumpkin to turn it.') : 'Drag to turn your pumpkin';
+    const free = face === 'blank';
+    say(carving ? (free ? 'Carve any face or pattern you like.' : `Carve along the lines to give it a ${NAMES[face]} face.`)
+      : items.length ? 'Your pumpkin is glowing. Spin it to admire.'
+      : free ? 'Your blank pumpkin is ready for your own design.' : `Your ${NAMES[face]} pumpkin is ready to carve.`);
+    if (carving) { // turn the face toward the carver
+      const d = camera.position.distanceTo(controls.target);
+      camera.position.set(0, controls.target.y + d * 0.18, d * 0.98);
+    }
+  }
+  $('carveBtn').onclick = () => setMode(mode === 'carve' ? 'spin' : 'carve');
+  document.querySelectorAll('[data-face]').forEach(b => b.onclick = () => {
+    document.querySelectorAll('[data-face]').forEach(o => o.setAttribute('aria-pressed', o === b));
+    face = b.dataset.face; drawGuide(); setMode(mode);
+  });
+  const size = $('knifeSize');
+  const setSize = () => { brush = +size.value; $('sizeOut').textContent = size.value + ' px'; size.style.setProperty('--fill', ((size.value - size.min) / (size.max - size.min) * 100) + '%'); };
+  size.oninput = setSize; setSize();
+  const undo = () => { items.pop(); redraw(); };
+  $('undo').onclick = undo;
+  addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo(); } });
+  $('newPumpkin').onclick = () => { items = []; redraw(); setMode(mode); };
+  let candle = true;
+  $('candle').onclick = () => { candle = !candle; $('candle').setAttribute('aria-pressed', candle); $('candle').textContent = candle ? 'Candle on' : 'Candle off'; };
+  drawGuide();
+
+  // ---------- loop ----------
+  redraw(); // start with an uncarved pumpkin
+  let prev = performance.now();
+  renderer.setAnimationLoop(now => {
+    const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+    flushCarve();
+    if (texDirty) { alphaTex.needsUpdate = emitTex.needsUpdate = true; texDirty = false; }
+    const flick = 0.85 + 0.09 * Math.sin(now / 90) + 0.05 * Math.sin(now / 37 + 1) + 0.04 * Math.sin(now / 13);
+    const open = Math.min(1, carvedArea / 120000);
+    const on = candle ? 1 : 0;
+    innerLight.intensity = 1.2 * flick * on;
+    spill.intensity = 1.4 * open * flick * on;
+    shellMat.emissiveIntensity = 0.6 * flick * on;
+    innerMat.emissive.setRGB(0.16 * flick * on, 0.05 * flick * on, 0.005 * on);
+    for (const m of wallMats) m.emissiveIntensity = 0.28 * m.userData.depth * flick * on; // inner flesh catches the candle
+    flame.visible = candle;
+    flame.scale.set(0.1 * flick, 0.2 * (0.9 + 0.2 * Math.sin(now / 60)), 1);
+    stepParticles(dt); stepMagic(dt, now);
+    controls.update();
+    composer.render();
+  });
+})();
+</script>
+</body></html>
