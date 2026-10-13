@@ -440,17 +440,17 @@
   // lumpy bark sides with root flares, a rounded bevel where the bark meets the cut, and a sawn face with growth rings
   const ST = { top: GROUND, bot: GROUND - 0.62, R: 1.3, A: 256, HS: 36 };
   // how it was felled: a wedge notch on one side, a splintery hinge where the last fibres tore on the other, a few bark chips
-  const NOTCH = 2.45, HINGE = NOTCH - Math.PI + 0.15;
+  const NOTCH = 2.3, HINGE = 0.55;
   const CHIPS = [[0.9, 0.12, 0.07], [1.7, 0.08, 0.05], [3.4, 0.16, 0.09], [4.3, 0.07, 0.045], [5.0, 0.11, 0.06], [5.95, 0.09, 0.05]];
   const ad = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   const sstep = (e0, e1, v) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-  const bevAt = a => { let b = 0.055 + 0.018 * Math.sin(4 * a + 1) + 0.01 * Math.sin(9 * a + 2.5); // never the same width twice
+  const bevAt = a => { let b = 0.075 + 0.025 * Math.sin(4 * a + 1) + 0.015 * Math.sin(9 * a + 2.5); // never the same width twice
     CHIPS.forEach(([ca, w, d]) => { const k = ad(a, ca) / w; b += d * Math.exp(-k * k); }); return b; };
   function edgeH(a, r, R) { // height offset of the sawn face; zero in the middle where the pumpkin sits
-    let h = 0.008 * Math.sin(5 * a + r * 9) * sstep(0.7 * R, R, r); // the saw wandered a little near the edge
-    h -= 0.14 * sstep(0.42, 0.26, Math.abs(ad(a, NOTCH))) * sstep(0.8 * R, R, r); // notch: a sloped wedge face
-    const hb = (r - 0.9 * R) / (0.055 * R), jag = Math.abs(Math.sin(a * 53) * Math.sin(a * 21 + 1)) + 0.4 * Math.abs(Math.sin(a * 131));
-    h += sstep(0.6, 0.38, Math.abs(ad(a, HINGE))) * Math.exp(-hb * hb) * (0.025 + 0.055 * jag); // torn hinge splinters
+    let h = (0.018 * Math.sin(5 * a + r * 9) + 0.01 * Math.sin(13 * a + 1)) * sstep(0.7 * R, R, r); // the saw wandered a little near the edge
+    h -= 0.24 * sstep(0.45, 0.28, Math.abs(ad(a, NOTCH))) * sstep(0.74 * R, R, r); // notch: a sloped wedge face
+    const hb = (r - 0.88 * R) / (0.07 * R), jag = Math.abs(Math.sin(a * 53) * Math.sin(a * 21 + 1)) + 0.4 * Math.abs(Math.sin(a * 131));
+    h += sstep(0.6, 0.38, Math.abs(ad(a, HINGE))) * Math.exp(-hb * hb) * (0.03 + 0.11 * jag); // torn hinge splinters
     return h; }
   const rootAt = [0.4, 1.55, 2.6, 3.9, 5.1], rootAmp = [0.42, 0.3, 0.5, 0.36, 0.46];
   const lumpR = a => ST.R * (1 + 0.025 * Math.sin(3 * a + 1.2) + 0.018 * Math.sin(5 * a + 0.4) + 0.01 * Math.sin(11 * a + 2.0)); // never quite round
@@ -465,11 +465,11 @@
     const ringPath = (rr, wob, ph) => { x.beginPath(); for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2;
       const k = rr * (1 + wob * (Math.sin(3 * a + ph) * 0.6 + Math.sin(7 * a + ph * 2) * 0.4)); const px = C + 14 * (1 - rr / C) + Math.cos(a) * k, py = C - 9 * (1 - rr / C) + Math.sin(a) * k;
       i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); };
-    const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#6e4a2c'); wood.addColorStop(0.6, '#8a6038'); wood.addColorStop(1, '#a37a4a');
-    ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#cfa774'; x.fill(); // sapwood
+    const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#9a6a3c'); wood.addColorStop(0.6, '#c08a52'); wood.addColorStop(1, '#d6a86c');
+    ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#f0d29a'; x.fill(); // sapwood
     ringPath(C * 0.86, 0.012, 0.5); x.fillStyle = wood; x.fill();
     for (let rr = C * 0.84, i = 0; rr > 6; rr -= 5 + Math.random() * 9 * (rr / C + 0.3), i++) { // growth rings: thin dark latewood lines
-      ringPath(rr, 0.006 + 0.012 * Math.random(), i * 0.37); x.strokeStyle = `rgba(52,30,16,${0.3 + Math.random() * 0.35})`; x.lineWidth = 1 + Math.random() * 2.2; x.stroke(); }
+      ringPath(rr, 0.006 + 0.012 * Math.random(), i * 0.37); x.strokeStyle = `rgba(70,38,16,${0.45 + Math.random() * 0.4})`; x.lineWidth = 1.5 + Math.random() * 3; x.stroke(); }
     x.save(); ringPath(C * 0.86, 0.012, 0.5); x.clip();
     for (let i = 0; i < 140; i++) { const a = Math.random() * 7, r0 = Math.random() * C * 0.3, r1 = r0 + 40 + Math.random() * C * 0.5; // medullary rays
       x.strokeStyle = 'rgba(230,200,150,.08)'; x.lineWidth = 1; x.beginPath(); x.moveTo(C + Math.cos(a) * r0, C + Math.sin(a) * r0); x.lineTo(C + Math.cos(a) * r1, C + Math.sin(a) * r1); x.stroke(); }
@@ -489,8 +489,9 @@
       x.beginPath(); x.ellipse(C + Math.cos(a) * r, C + Math.sin(a) * r, 3 + Math.random() * 8, 2 + Math.random() * 3, a, 0, 7); x.fill(); }
     x.restore();
     const P = (a, f) => [C + Math.cos(a) * f * C, C + Math.sin(a) * f * C];
-    for (let i = 0; i < 26; i++) { const f = 0.74 + i * 0.006, a0 = NOTCH - 0.36, a1 = NOTCH + 0.36; // notch: smoother, lighter fresh cut with straight saw lines
-      x.strokeStyle = i % 3 ? 'rgba(214,170,116,.22)' : 'rgba(80,48,24,.25)'; x.lineWidth = 5; x.beginPath(); x.moveTo(...P(a0, f)); x.lineTo(...P(a1, f)); x.stroke(); }
+    { x.save(); x.beginPath(); x.moveTo(...P(NOTCH - 0.4, 0.66)); for (let i = 0; i <= 20; i++) x.lineTo(...P(NOTCH - 0.4 + i / 20 * 0.8, 0.9)); x.lineTo(...P(NOTCH + 0.4, 0.66)); x.closePath(); x.clip(); // notch: paler, freshly sawn
+      const g2 = x.createRadialGradient(...P(NOTCH, 0.85), 0, ...P(NOTCH, 0.85), C * 0.3); g2.addColorStop(0, 'rgba(250,224,170,.55)'); g2.addColorStop(1, 'rgba(250,224,170,0)'); x.fillStyle = g2; x.fillRect(0, 0, N, N);
+      x.restore(); }
     for (let i = 0; i < 260; i++) { const a = HINGE + (Math.random() - .5) * 1.1, f = 0.8 + Math.random() * 0.1, l = 0.01 + Math.random() * 0.04; // hinge: torn fibres
       x.strokeStyle = Math.random() < .55 ? `rgba(226,190,136,${0.4 + Math.random() * 0.4})` : `rgba(48,28,14,${0.4 + Math.random() * 0.3})`;
       x.lineWidth = 1 + Math.random() * 2.5; x.beginPath(); x.moveTo(...P(a, f)); x.lineTo(...P(a + (Math.random() - .5) * 0.02, f + l)); x.stroke(); }
