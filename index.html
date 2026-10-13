@@ -436,6 +436,18 @@
   const rimR = new THREE.DirectionalLight(0xb59bff, 0.4); rimR.position.set(4, 1.5, -3); scene.add(rimR);
 
   const GROUND = -0.7;
+  // shared noise for the hand-sculpted surfaces of the stump and pumpkin
+  const seeded = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const noise3 = (() => { const rnd = seeded(5), P = new Uint8Array(512), G = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { P[i] = i; G[i] = rnd() * 2 - 1; }
+    for (let i = 255; i > 0; i--) { const j = (rnd() * (i + 1)) | 0, t = P[i]; P[i] = P[j]; P[j] = t; }
+    for (let i = 0; i < 256; i++) P[i + 256] = P[i];
+    const h = (x, y, z) => G[P[P[P[x & 255] + (y & 255)] + (z & 255)]], sm = t => t * t * (3 - 2 * t), L = (a, b, t) => a + (b - a) * t;
+    return (x, y, z) => { const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), u = sm(x - xi), v = sm(y - yi), w = sm(z - zi);
+      return L(L(L(h(xi, yi, zi), h(xi + 1, yi, zi), u), L(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), u), v),
+               L(L(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), u), L(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), u), v), w); }; })();
+  const fbm = (x, y, z, oct = 3) => { let s = 0, a = 1, n = 0; for (let i = 0; i < oct; i++) { s += a * noise3(x, y, z); n += a; a *= 0.5; x *= 2.07; y *= 2.07; z *= 2.07; } return s / n; };
+  const crev = (x, y, z) => { const n = 1 - Math.abs(noise3(x, y, z) + 0.6 * noise3(x * 2.3 + 7, y * 2.3, z * 2.3) * 0.5); return Math.pow(Math.max(0, n), 10); }; // thin wandering crevice lines
   // the pumpkin sits on a chunky storybook tree stump: twisting bark plates, fat root toes, a thick rounded rim,
   // and hand-painted shading (light worn edges, dark grooves, warm top, cool foot) baked into vertex colours so it reads painted, not plastic
   const ST = { top: GROUND, bot: GROUND - 0.62, R: 1.62, A: 320, HS: 44 };
@@ -443,30 +455,16 @@
   const ad = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   const lumpR = a => ST.R * (1 + 0.025 * Math.sin(3 * a + 1.2) + 0.018 * Math.sin(5 * a + 0.4));
   const plate = (a, t) => a * 6 + t * 0.7 + 0.35 * Math.sin(a * 3 + 1) + 0.15 * Math.sin(a * 11 + t * 3); // 12 chunky plates that twist as they rise
-  // chipped-out bark (a, t, half-width in radians, half-height in t, depth) and one deep knot hole
-  const SIDE_CHIPS = [[1.2, 0.55, 0.09, 0.18, 0.06], [2.05, 0.35, 0.07, 0.14, 0.05], [0.55, 0.7, 0.06, 0.12, 0.045], [2.75, 0.62, 0.1, 0.16, 0.055],
-    [3.6, 0.45, 0.08, 0.2, 0.05], [4.4, 0.6, 0.07, 0.14, 0.05], [5.3, 0.4, 0.09, 0.16, 0.06], [1.65, 0.78, 0.05, 0.09, 0.04], [1.75, 0.42, 0.035, 0.06, 0.12]];
-  function sideDent(a, t) { let d = 0;
-    for (const [ca, ct, w, h, dep] of SIDE_CHIPS) { const e = (ad(a, ca) / w) ** 2 + ((t - ct) / h) ** 2; if (e < 1) d = Math.max(d, dep * Math.pow(1 - e, 0.45)); } // flat-bottomed, steep-walled
-    return d; }
   function sideR(a, t) { // t: 0 at the foot, 1 at the top of the bark
-    let r = lumpR(a) + 0.12 * Math.pow(1 - t, 2) - sideDent(a, t);
+    const cx = Math.cos(a) * 3, cz = Math.sin(a) * 3, ty = t * 2.2;
+    let r = lumpR(a) + 0.12 * Math.pow(1 - t, 2) + 0.016 * fbm(cx, ty, cz, 3) + 0.006 * fbm(cx * 4, ty * 4, cz * 4, 2) - 0.014 * crev(cx * 1.6, ty * 1.8, cz * 1.6); // knobbly, chaotic bark
     ROOTS.forEach(([ra, amp, w]) => { const d = ad(a, ra) / w; r += amp * Math.exp(-d * d) * Math.pow(1 - t, 2.4); });
     const s = Math.abs(Math.sin(plate(a, t)));
     return r + 0.03 * Math.sqrt(s) - 0.11 * Math.pow(1 - s, 6); // rounded bulging plates, narrow deep furrows
   }
   const bevAt = a => 0.085 + 0.02 * Math.sin(5 * a + 1);
-  // on the sawn top, outside the pumpkin's footprint: round knot and worm holes, and a few V-shaped axe chops
-  const TOP_PITS = [[0.9, 1.2, 0.09, 0.05], [1.85, 1.28, 0.06, 0.06], [2.5, 1.12, 0.12, 0.04], [3.5, 1.3, 0.07, 0.05], [5.6, 1.18, 0.1, 0.045], [1.35, 1.36, 0.04, 0.05]];
-  const AXE = [[1.55, 1.06, 1.42, 0.25, 0.045, 0.06], [2.2, 1.0, 1.38, -0.3, 0.035, 0.05], [0.3, 1.05, 1.4, 0.2, 0.04, 0.055], [4.0, 1.08, 1.42, -0.2, 0.04, 0.05]];
-  function topDent(px, pz) { let d = 0;
-    for (const [ang, rad, size, dep] of TOP_PITS) { const q = Math.hypot(px - Math.cos(ang) * rad, pz - Math.sin(ang) * rad) / size; if (q < 1) d = Math.max(d, dep * (1 - Math.pow(q, 4))); }
-    for (const [ang, r0, r1, skew, w, dep] of AXE) { // segment from r0 to r1 along a slightly skewed radial line
-      const ax = Math.cos(ang) * r0, az = Math.sin(ang) * r0, bx = Math.cos(ang + skew * 0.3) * r1, bz = Math.sin(ang + skew * 0.3) * r1;
-      const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz, s = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / L2)), q = Math.hypot(px - ax - vx * s, pz - az - vz * s) / w;
-      if (q < 1) d = Math.max(d, dep * (1 - q) * Math.sin(Math.PI * Math.min(1, s * 1.15))); }
-    return d; }
-  const edgeH = (a, r, R) => 0.012 * Math.sin(4 * a + r * 5) * Math.max(0, (r / R - 0.7) / 0.3) - topDent(Math.cos(a) * r, Math.sin(a) * r); // gently uneven, plus the chops and holes
+  const edgeH = (a, r, R) => { const px = Math.cos(a) * r, pz = Math.sin(a) * r, rim = Math.max(0, (r / R - 0.68) / 0.32);
+    return 0.003 * fbm(px * 5, 1, pz * 5, 2) + rim * (0.022 * fbm(px * 2.5, 4, pz * 2.5, 3) - 0.012 * crev(px * 3, 2, pz * 3)); }; // fine everywhere, rougher toward the rim
   const paint = (cols, k) => { k = Math.min(1, Math.max(0, k)) * (cols.length - 1); const i = Math.min(cols.length - 2, Math.floor(k)), f = k - i; return cols[i].clone().lerp(cols[i + 1], f); };
   // sawn top: polar texture, honey wood with brushy rings and cracks, bark rim from 0.91
   const stumpCap = (() => { const N = 2048, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), C = N / 2;
@@ -477,9 +475,13 @@
     x.fillStyle = '#2a1a10'; x.fillRect(0, 0, N, N);
     const wood = x.createRadialGradient(PX, PY, 0, C, C, C * 0.92); wood.addColorStop(0, '#e2b06a'); wood.addColorStop(0.55, '#d9a560'); wood.addColorStop(1, '#c48a4a');
     ringPath(C * 0.91, 0.006, 0.5); x.fillStyle = wood; x.fill();
-    for (let i = 0; i < 90; i++) { const a = Math.random() * 7, r = Math.random() * C * 0.85; // painted colour variation
-      const g = x.createRadialGradient(C + Math.cos(a) * r, C + Math.sin(a) * r, 0, C + Math.cos(a) * r, C + Math.sin(a) * r, 60 + Math.random() * 160);
-      g.addColorStop(0, Math.random() < .5 ? 'rgba(255,214,150,.18)' : 'rgba(150,90,40,.14)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, N, N); }
+    x.lineCap = 'round';
+    for (let i = 0; i < 6000; i++) { const a = Math.random() * 7, r = Math.random() * C * 0.9, l = 0.004 + Math.random() * 0.02; // fine fibres running with the rings
+      x.strokeStyle = Math.random() < 0.5 ? `rgba(255,222,160,${0.08 + Math.random() * 0.14})` : `rgba(120,70,30,${0.08 + Math.random() * 0.14})`; x.lineWidth = 0.8 + Math.random() * 1.8;
+      x.beginPath(); x.moveTo(C + Math.cos(a) * r, C + Math.sin(a) * r); x.lineTo(C + Math.cos(a + l) * r, C + Math.sin(a + l) * r); x.stroke(); }
+    for (let i = 0; i < 160; i++) { let px = C + (Math.random() - .5) * C * 1.7, py = C + (Math.random() - .5) * C * 1.7; // hairline checking
+      x.strokeStyle = `rgba(70,38,16,${0.18 + Math.random() * 0.25})`; x.lineWidth = 0.8 + Math.random(); x.beginPath(); x.moveTo(px, py);
+      for (let k = 0; k < 6 + Math.random() * 10; k++) { px += (Math.random() - .5) * 26; py += (Math.random() - .5) * 26; x.lineTo(px, py); } x.stroke(); }
     x.save(); ringPath(C * 0.91, 0.006, 0.5); x.clip(); x.lineCap = x.lineJoin = 'round';
     for (let rr = C * 0.88, i = 0; rr > 14; i++) { // growth rings as loose brush strokes: broken, varying in weight
       const pts = ringPts(rr, 0.004 + 0.008 * Math.random(), i * 0.37);
@@ -488,13 +490,14 @@
         x.strokeStyle = `rgba(${130 + Math.random() * 20},${78 + Math.random() * 16},${34},${0.35 + Math.random() * 0.4})`; x.lineWidth = 2 + Math.random() * 5; x.stroke(); j += len + ((Math.random() * 4) | 0); }
       rr -= 9 + Math.random() * 13 * (rr / C + 0.3); }
     const rim = x.createRadialGradient(C, C, C * 0.6, C, C, C * 0.91); rim.addColorStop(0, 'rgba(90,50,20,0)'); rim.addColorStop(1, 'rgba(90,50,20,.35)'); x.fillStyle = rim; x.fillRect(0, 0, N, N); // darker toward the bark
-    x.fillStyle = 'rgba(90,50,20,.6)'; x.beginPath(); x.arc(PX, PY, 14, 0, 7); x.fill();
+    x.fillStyle = 'rgba(90,50,20,.6)'; x.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * 7, r = 8 + Math.random() * 12; x.lineTo(PX + Math.cos(a) * r, PY + Math.sin(a) * r); } x.fill(); // pith
     x.restore();
     ringPath(C * 0.913, 0.005, 0.35); x.strokeStyle = '#4a2a14'; x.lineWidth = C * 0.012; x.stroke();
     x.save(); x.beginPath(); x.arc(C, C, C + 2, 0, 7); x.closePath(); ringPath(C * 0.918, 0.005, 0.2, true); x.clip('evenodd'); // bark rim
     x.fillStyle = '#6a4630'; x.fillRect(0, 0, N, N);
-    for (let i = 0; i < 1600; i++) { const a = Math.random() * 7, r = C * (0.918 + Math.random() * 0.082);
-      x.fillStyle = ['#4a301e', '#7e5638', '#8e6644', '#5a3a24'][i % 4]; x.beginPath(); x.ellipse(C + Math.cos(a) * r, C + Math.sin(a) * r, 6 + Math.random() * 16, 4 + Math.random() * 6, a + Math.PI / 2, 0, 7); x.fill(); }
+    for (let i = 0; i < 2600; i++) { const a = Math.random() * 7, r = C * (0.918 + Math.random() * 0.082), cx = C + Math.cos(a) * r, cy = C + Math.sin(a) * r, sz = 3 + Math.random() * 10; // jagged bark flakes
+      x.fillStyle = ['#4a301e', '#7e5638', '#8e6644', '#5a3a24', '#2e1c10'][i % 5]; x.beginPath();
+      for (let k = 0, n = 4 + (Math.random() * 4 | 0); k < n; k++) { const q = a + k / n * 7 + Math.random() * 0.6, rr = sz * (0.4 + Math.random()); x.lineTo(cx + Math.cos(q) * rr, cy + Math.sin(q) * rr * 0.6); } x.fill(); }
     x.restore();
     for (let k = 0, n = 10; k < n; k++) { // drying cracks: dark gap with a lit lip on one side, painterly
       const a0 = k / n * Math.PI * 2 + (Math.random() - .5) * 0.4, r0 = C * (0.05 + Math.random() * 0.3), r1 = C * (Math.random() < 0.7 ? 1.01 : 0.6 + Math.random() * 0.25), w = 4 + Math.random() * 8;
@@ -514,11 +517,13 @@
       m.beginPath(); m.moveTo(px, py); m.quadraticCurveTo(px + (Math.random() - .5) * 10, py + l / 2, px + (Math.random() - .5) * 8, py + l); m.stroke(); }
     for (let i = 0; i < 260; i++) { const px = Math.random() * BW, py = Math.random() * BH; // little horizontal breaks in the bark
       m.strokeStyle = 'rgba(60,36,20,.45)'; m.lineWidth = 2 + Math.random() * 2; m.beginPath(); m.moveTo(px, py); m.lineTo(px + 12 + Math.random() * 20, py + (Math.random() - .5) * 4); m.stroke(); }
-    for (let i = 0; i < 700; i++) { const yy = BH - Math.pow(Math.random(), 1.4) * BH * 0.7, px = Math.random() * BW; // moss tufts, painted in soft dabs
-      for (let k = 0; k < 4; k++) { m.fillStyle = `rgba(${110 + Math.random() * 50},${150 + Math.random() * 50},${60 + Math.random() * 30},${0.25 + Math.random() * 0.25})`;
-        m.beginPath(); m.arc(px + (Math.random() - .5) * 18, yy + (Math.random() - .5) * 10, 3 + Math.random() * 9, 0, 7); m.fill(); } }
-    const knot = (kx, ky, s) => { [[1, '#5a3a22'], [0.75, '#c49a6a'], [0.52, '#7a5232'], [0.3, '#2a180c']].forEach(([k, col]) => { m.fillStyle = col; m.beginPath(); m.ellipse(kx, ky, s * k, s * k * 1.35, 0, 0, 7); m.fill(); }); };
-    knot(BW * 0.31, BH * 0.6, 40); knot(BW * 0.78, BH * 0.42, 28);
+    for (let i = 0; i < 260; i++) { let px = Math.random() * BW, py = Math.random() * BH; // wandering hairline cracks
+      m.strokeStyle = `rgba(40,24,12,${0.3 + Math.random() * 0.3})`; m.lineWidth = 0.8 + Math.random() * 1.4; m.beginPath(); m.moveTo(px, py);
+      for (let k = 0; k < 5 + Math.random() * 8; k++) { px += (Math.random() - .5) * 14; py += Math.random() * 22; m.lineTo(px, py); } m.stroke(); }
+    for (let i = 0; i < 520; i++) { const cy0 = BH - Math.pow(Math.random(), 1.4) * BH * 0.7, cx0 = Math.random() * BW; // moss: ragged tufts of tiny strands, not dabs
+      for (let k = 0; k < 14; k++) { const px = cx0 + (Math.random() - .5) * 26, py = cy0 + (Math.random() - .5) * 14, a = -Math.PI / 2 + (Math.random() - .5) * 1.6, l = 3 + Math.random() * 7;
+        m.strokeStyle = `rgba(${100 + Math.random() * 60},${140 + Math.random() * 60},${50 + Math.random() * 30},${0.3 + Math.random() * 0.35})`; m.lineWidth = 1 + Math.random() * 1.5;
+        m.beginPath(); m.moveTo(px, py); m.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); m.stroke(); } }
     const t = new THREE.CanvasTexture(cm); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; return t; })();
   const BARK_TONES = [new THREE.Color(0x1c110c), new THREE.Color(0x4e3222), new THREE.Color(0x86593a), new THREE.Color(0xc89462)];
   const stumpSide = (() => {
@@ -529,9 +534,8 @@
         pos.push(Math.cos(a) * r, y, Math.sin(a) * r); uv.push(i / A * 3, t);
         const ph = plate(am, t), s = Math.abs(Math.sin(ph)), groove = Math.pow(1 - s, 4), lit = 0.5 + 0.5 * Math.cos(ph) * Math.sign(Math.sin(ph) || 1);
         const k = 0.15 + 0.55 * t + 0.25 * lit * s - 0.6 * groove + 0.12 * Math.pow(s, 8); // grooves sink into shadow, plate crowns catch the light, the foot stays dark
-        const cc = paint(BARK_TONES, k), ch = sideDent(am, t);
-        if (ch > 0.09) cc.lerp(new THREE.Color(0x120a06), Math.min(1, (ch - 0.09) * 30)); // knot hole
-        else if (ch > 0) cc.lerp(new THREE.Color(0xd8a46a), Math.min(0.85, ch * 22)); // bark knocked off, light wood underneath
+        const cx = Math.cos(am) * 3, cz = Math.sin(am) * 3, ty = t * 2.2;
+        const cc = paint(BARK_TONES, k - 0.45 * crev(cx * 1.6, ty * 1.8, cz * 1.6)).multiplyScalar(0.82 + 0.36 * (0.5 + 0.5 * fbm(cx * 5, ty * 5, cz * 5, 3))); // chaotic tonal breakup
         col.push(cc.r, cc.g, cc.b); } }
     for (let j = 0; j < HS; j++) for (let i = 0; i < A; i++) { const a = j * (A + 1) + i, b = a + A + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -540,7 +544,7 @@
     const { A } = ST, RINGS = 56, BEV = 10, pos = [0, ST.top, 0], uv = [0.5, 0.5], col = [1, 1, 1], idx = [];
     for (let k = 1; k <= RINGS + BEV; k++) for (let i = 0; i <= A; i++) {
       const a = i / A * Math.PI * 2, am = a % (Math.PI * 2), R = sideR(am, 1), bv = bevAt(am); let r, y, shade;
-      if (k <= RINGS) { const f = 1 - Math.pow(1 - k / RINGS, 1.5); r = (R - bv) * f; y = ST.top + edgeH(am, r, R); shade = (1 - 0.12 * Math.pow(f, 4)) * (1 - Math.min(0.65, topDent(Math.cos(am) * r, Math.sin(am) * r) * 13)); }
+      if (k <= RINGS) { const f = 1 - Math.pow(1 - k / RINGS, 1.5); r = (R - bv) * f; y = ST.top + edgeH(am, r, R); const px = Math.cos(am) * r, pz = Math.sin(am) * r; shade = (1 - 0.12 * Math.pow(f, 4)) * (0.88 + 0.24 * (0.5 + 0.5 * fbm(px * 3, 7, pz * 3, 3))) * (1 - 0.4 * crev(px * 3, 2, pz * 3) * Math.max(0, (f - 0.6) / 0.4)); }
       else { const e = (k - RINGS) / BEV, q = e * Math.PI / 2; r = R - bv + Math.sin(q) * bv; y = ST.top + edgeH(am, R - bv, R) - (1 - Math.cos(q)) * bv;
         const z = (e - 0.3) / 0.2; shade = 0.9 + 0.4 * Math.exp(-z * z) - 0.45 * e; } // bright worn crown, darker as it rolls down
       const f = Math.min(1, r / (lumpR(am) + 0.04));
@@ -687,6 +691,10 @@
       const gg = x.createRadialGradient(px, py, 0, px, py, r); gg.addColorStop(0, `rgba(${v},${v},${v},.14)`); gg.addColorStop(1, `rgba(${v},${v},${v},0)`);
       x.fillStyle = gg; x.fillRect(px - r, py - r, r * 2, r * 2);
     }
+    for (let i = 0; i < 1400; i++) { // fine chaotic scratches and nicks, mostly along the ribs
+      let px = Math.random() * 1024, py = Math.random() * 512; const v = Math.random() < 0.7 ? 0 : 255;
+      x.strokeStyle = `rgba(${v},${v},${v},${0.1 + Math.random() * 0.18})`; x.lineWidth = 0.6 + Math.random() * 1.2; x.beginPath(); x.moveTo(px, py);
+      for (let k = 0; k < 2 + Math.random() * 4; k++) { px += (Math.random() - .5) * 8; py += (Math.random() - .3) * 14; x.lineTo(px, py); } x.stroke(); }
     x.lineWidth = 1.2; x.strokeStyle = 'rgba(0,0,0,.12)';
     for (let i = 0; i < 260; i++) { // fine wrinkles
       let px = Math.random() * 1024, py = Math.random() * 512; x.beginPath(); x.moveTo(px, py);
@@ -800,22 +808,17 @@
   function redraw() { carvedArea = 0; paintBase(); items.forEach(applyItem); texDirty = true; }
 
   // ---------- pumpkin ----------
-  // hand-sculpted feel: thumb-press dents, a few soft lumps and faint tool strokes along the ribs.
-  // Seeded, and keyed to direction, so the skin, flesh layers, guide and hit proxy all deform identically.
-  const seeded = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-  const SCULPT = (() => { const rnd = seeded(11), out = [];
-    for (let i = 0; i < 46; i++) { const y = -0.55 + rnd() * 1.25, ang = rnd() * Math.PI * 2, rr = Math.sqrt(1 - y * y), bump = i % 6 === 0;
-      out.push([Math.cos(ang) * rr, y, Math.sin(ang) * rr, 0.1 + rnd() * 0.2, bump ? 0.008 + rnd() * 0.01 : -(0.01 + rnd() * 0.022)]); }
-    return out; })();
-  function sculptAt(ux, uy, uz, a) {
-    let k = 1 + 0.0045 * Math.sin(a * 46 + uy * 6 + Math.sin(a * 9) * 2) * (1 - uy * uy);
-    for (const [dx, dy, dz, rad, amt] of SCULPT) { const th = Math.acos(Math.min(1, ux * dx + uy * dy + uz * dz)); if (th < rad) { const q = 1 - (th / rad) ** 2; k += amt * q * q; } }
-    return k; }
+  // fine chaotic sculpting: layered value noise for uneven lumps plus a web of hairline crevices. Keyed to direction and
+  // cached per mesh resolution, so the skin, flesh layers, guide and hit proxy all deform identically.
+  function sculptAt(ux, uy, uz) {
+    return 1 + 0.008 * fbm(ux * 4 + 3, uy * 4, uz * 4, 3) + 0.003 * fbm(ux * 17, uy * 17 + 5, uz * 17, 2) - 0.007 * crev(ux * 6, uy * 6, uz * 6 + 2); }
+  const sculptCache = {};
   function pumpkinGeometry(scale, ws = 160, hs = 100) {
     const geo = new THREE.SphereGeometry(1, ws, hs), p = geo.attributes.position, v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
-      const a = Math.atan2(v.z, v.x), sk = sculptAt(v.x, v.y, v.z, a);
+      const a = Math.atan2(v.z, v.x), key = ws + 'x' + hs, cache = sculptCache[key] || (sculptCache[key] = new Float32Array(p.count).fill(0));
+      const sk = cache[i] || (cache[i] = sculptAt(v.x, v.y, v.z));
       const rib = 0.86 + 0.14 * Math.pow(Math.abs(Math.sin(5 * a)), 0.38); // fat rounded lobes, deep narrow creases
       const wob = 1 + 0.04 * Math.sin(a + 0.7) + 0.02 * Math.sin(2 * a + 2.1); // one side a touch fuller
       const bulge = 1 + 0.1 * (1 - v.y * v.y) - 0.04 * v.y; // wide and squat, fullest just below the middle
