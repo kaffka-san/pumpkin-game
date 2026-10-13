@@ -595,8 +595,10 @@
     }
     return new THREE.CanvasTexture(c);
   })();
-  colorX.drawImage(baseC, 0, 0); // the skin never changes; cuts only touch the alpha and glow maps
+  colorX.drawImage(baseC, 0, 0);
+  let colorDirty = true, colorUp = 0;
   function paintBase() {
+    colorX.drawImage(baseC, 0, 0); colorDirty = true; // skin is repainted so each cut can leave a pale rind around its edge
     alphaX.fillStyle = '#fff'; alphaX.fillRect(0, 0, W, H);
     emitX.fillStyle = '#000'; emitX.fillRect(0, 0, W, H);
   }
@@ -607,6 +609,11 @@
     emitX.save(); emitX.fillStyle = emitX.strokeStyle = '#a85418'; emitX.lineWidth = ring * 2; emitX.lineJoin = 'round';
     emitX.shadowColor = '#c85a08'; emitX.shadowBlur = 22;
     pathFn(emitX); emitX.stroke(); emitX.fill(); emitX.restore();
+    // exposed flesh at the knife edge: a golden bevel fading into a creamy rim
+    colorX.save(); colorX.lineJoin = 'round'; pathFn(colorX);
+    colorX.strokeStyle = 'rgba(236,150,62,.75)'; colorX.lineWidth = ring * 1.2; colorX.stroke();
+    colorX.strokeStyle = '#ffd98f'; colorX.lineWidth = ring * 0.62; colorX.stroke();
+    colorX.restore(); colorDirty = true;
     alphaX.fillStyle = '#000'; pathFn(alphaX); alphaX.fill();
   }
   // brush dabs: a pre-rendered soft glow sprite instead of a live blur
@@ -614,8 +621,13 @@
     const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
     g.addColorStop(0, 'rgba(190,96,30,1)'); g.addColorStop(0.45, 'rgba(168,84,24,.9)'); g.addColorStop(1, 'rgba(120,45,5,0)');
     x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c; })();
+  const rindDab = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, '#ffd98f'); g.addColorStop(0.68, '#ffd98f'); g.addColorStop(0.78, 'rgba(238,156,66,.85)'); g.addColorStop(1, 'rgba(226,120,36,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c; })();
   function dab(x, y, rx, ry) {
     emitX.drawImage(glowDab, x - rx * 2.2, y - ry * 2.2, rx * 4.4, ry * 4.4);
+    colorX.drawImage(rindDab, x - rx * 1.45, y - ry * 1.45, rx * 2.9, ry * 2.9); colorDirty = true;
     alphaX.beginPath(); alphaX.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); alphaX.fill();
   }
   const ellipsePath = (x, y, rx, ry) => c => { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); };
@@ -716,14 +728,41 @@
   const guide = new THREE.Mesh(pumpkinGeometry(1.004), new THREE.MeshBasicMaterial({ map: guideTex, transparent: true, depthWrite: false }));
   pumpkin.add(guide);
   const hitProxy = new THREE.Mesh(pumpkinGeometry(1, 64, 40), new THREE.MeshBasicMaterial({ visible: false })); pumpkin.add(hitProxy); // cheap to raycast
-  const innerMat = new THREE.MeshStandardMaterial({ color: 0xf0a050, emissive: 0x401400, roughness: 0.9, side: THREE.BackSide });
+  // flesh grain for the cut walls: fine elongated fibres and pores
+  const fiberTex = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, 1024, 512);
+    for (let i = 0; i < 2600; i++) { const px = Math.random() * 1024, py = Math.random() * 512, l = 6 + Math.random() * 18;
+      x.strokeStyle = Math.random() < 0.6 ? `rgba(170,90,30,${0.08 + Math.random() * 0.14})` : `rgba(255,240,200,${0.2 + Math.random() * 0.3})`;
+      x.lineWidth = 0.8 + Math.random() * 1.4; x.beginPath(); x.moveTo(px, py); x.quadraticCurveTo(px + (Math.random() - .5) * 4, py + l / 2, px + (Math.random() - .5) * 3, py + l); x.stroke(); }
+    for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(160,80,20,${0.1 + Math.random() * 0.15})`; x.beginPath(); x.arc(Math.random() * 1024, Math.random() * 512, 0.8 + Math.random() * 1.6, 0, 7); x.fill(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t; })();
+  // the hollow: scooped flesh with stringy pulp hanging down and a few seeds left behind
+  const pulpTex = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 512); g.addColorStop(0, '#d98a3a'); g.addColorStop(0.5, '#f0a050'); g.addColorStop(1, '#e8963f');
+    x.fillStyle = g; x.fillRect(0, 0, 1024, 512);
+    for (let i = 0; i < 1400; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '255,214,140' : '190,100,30'},${0.08 + Math.random() * 0.12})`;
+      x.beginPath(); x.ellipse(Math.random() * 1024, Math.random() * 512, 2 + Math.random() * 6, 1 + Math.random() * 3, Math.random() * 3, 0, 7); x.fill(); } // scoop marks
+    x.lineCap = 'round';
+    for (let i = 0; i < 140; i++) { // stringy pulp drooping from the upper walls
+      let px = Math.random() * 1024, py = 60 + Math.random() * 260; const len = 40 + Math.random() * 140, sway = (Math.random() - .5) * 40;
+      x.strokeStyle = Math.random() < .5 ? `rgba(255,190,90,${0.35 + Math.random() * 0.35})` : `rgba(200,104,30,${0.3 + Math.random() * 0.3})`;
+      x.lineWidth = 1.2 + Math.random() * 2.6; x.beginPath(); x.moveTo(px, py);
+      x.bezierCurveTo(px + sway, py + len * 0.35, px - sway, py + len * 0.7, px + sway * 0.5, py + len); x.stroke(); }
+    const seed = (sx, sy, sc, rot) => { x.save(); x.translate(sx, sy); x.rotate(rot); x.scale(sc, sc);
+      x.fillStyle = 'rgba(120,60,20,.35)'; x.beginPath(); x.ellipse(1.5, 2, 9, 5.5, 0, 0, 7); x.fill();
+      x.fillStyle = '#fbeccc'; x.beginPath(); x.moveTo(-10, 0); x.quadraticCurveTo(-4, -7, 8, -4); x.quadraticCurveTo(12, 0, 8, 4); x.quadraticCurveTo(-4, 7, -10, 0); x.fill();
+      x.strokeStyle = '#e2c99a'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(-8, 0); x.quadraticCurveTo(0, -4, 8, -2.5); x.stroke(); x.restore(); };
+    for (let i = 0; i < 70; i++) seed(Math.random() * 1024, 380 + Math.random() * 120, 0.8 + Math.random() * 0.5, Math.random() * 6.3); // a little pile on the bottom
+    for (let i = 0; i < 22; i++) seed(Math.random() * 1024, 120 + Math.random() * 240, 0.7 + Math.random() * 0.4, Math.random() * 6.3); // stragglers stuck to the walls
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return t; })();
+  const innerMat = new THREE.MeshStandardMaterial({ map: pulpTex, color: 0xffffff, emissive: 0x401400, roughness: 0.9, side: THREE.BackSide });
   const inner = new THREE.Mesh(pumpkinGeometry(0.82), innerMat); pumpkin.add(inner);
   // thick wall: stacked flesh layers between the skin and the hollow, all cut by the same carving mask
   const wallGeo = [], wallMats = [];
   for (let i = 0; i < 16; i++) {
     const t = (i + 1) / 16, k = 0.975 - 0.155 * i / 15;
     const m = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.09 - 0.015 * t, 0.85, 0.66 - 0.12 * t), roughness: 0.85,
-      alphaMap: alphaTex, alphaTest: 0.5, emissive: 0xff8a20, emissiveIntensity: 0 });
+      map: fiberTex, alphaMap: alphaTex, alphaTest: 0.5, emissive: 0xff8a20, emissiveIntensity: 0 });
     m.userData.depth = t; wallMats.push(m);
     pumpkin.add(new THREE.Mesh(pumpkinGeometry(k), m));
   }
@@ -1212,6 +1251,7 @@
     const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
     flushCarve(); flushHover();
     if (texDirty) { alphaTex.needsUpdate = emitTex.needsUpdate = true; texDirty = false; }
+    if (colorDirty && now - colorUp > 140) { colorTex.needsUpdate = true; colorDirty = false; colorUp = now; } // full-size skin: refreshed a few times a second while carving
     room += (roomTarget - room) * Math.min(1, dt * 2.5);
     for (const [l, b] of ROOM) l.intensity = b * room;
     if (litFrom) { const k = Math.max(0, Math.min(1, (now - litFrom) / 2200)); lit = k * k * (3 - 2 * k); } else lit = 1;
