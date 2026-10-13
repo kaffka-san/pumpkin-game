@@ -715,19 +715,19 @@
   // face shapes: a dark cut lip on the skin, then the hole in the alpha mask
   function carveShape(pathFn, ring = 14) {
     // a thin darker lip where the skin was cut
-    colorX.save(); colorX.lineJoin = 'round'; pathFn(colorX);
-    colorX.strokeStyle = 'rgba(96,34,8,.45)'; colorX.lineWidth = ring * 0.75; colorX.stroke();
-    colorX.strokeStyle = 'rgba(64,20,4,.8)'; colorX.lineWidth = ring * 0.38; colorX.stroke();
+    colorX.save(); colorX.lineJoin = 'round'; colorX.shadowColor = 'rgba(70,22,4,.7)'; colorX.shadowBlur = ring * 1.6; pathFn(colorX); // soft, feathered lip
+    colorX.strokeStyle = 'rgba(96,34,8,.22)'; colorX.lineWidth = ring * 1.1; colorX.stroke();
+    colorX.strokeStyle = 'rgba(70,22,4,.45)'; colorX.lineWidth = ring * 0.4; colorX.stroke();
     colorX.restore(); colorDirty = true;
     alphaX.fillStyle = '#000'; pathFn(alphaX); alphaX.fill();
   }
   // brush dabs: a pre-rendered dark lip sprite instead of a live blur
   const rindDab = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
     const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, 'rgba(64,20,4,.85)'); g.addColorStop(0.88, 'rgba(64,20,4,.85)'); g.addColorStop(0.94, 'rgba(96,34,8,.4)'); g.addColorStop(1, 'rgba(110,40,10,0)');
+    g.addColorStop(0, 'rgba(70,22,4,.6)'); g.addColorStop(0.72, 'rgba(70,22,4,.55)'); g.addColorStop(0.85, 'rgba(96,34,8,.25)'); g.addColorStop(1, 'rgba(110,40,10,0)');
     x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c; })();
   function dab(x, y, rx, ry) {
-    colorX.drawImage(rindDab, x - rx * 1.12, y - ry * 1.12, rx * 2.24, ry * 2.24); colorDirty = true;
+    colorX.drawImage(rindDab, x - rx * 1.4, y - ry * 1.4, rx * 2.8, ry * 2.8); colorDirty = true;
     alphaX.beginPath(); alphaX.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); alphaX.fill();
   }
   const ellipsePath = (x, y, rx, ry) => c => { c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); };
