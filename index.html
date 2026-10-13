@@ -492,9 +492,9 @@
     const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t; })();
   // bark: long brushy strokes and moss; the strong shading comes from the vertex colours below
   const stumpBark = (() => { const BW = 2048, BH = 1024, cm = document.createElement('canvas'); cm.width = BW; cm.height = BH; const m = cm.getContext('2d');
-    m.fillStyle = '#b08a68'; m.fillRect(0, 0, BW, BH); m.lineCap = 'round';
+    m.fillStyle = '#a07c5c'; m.fillRect(0, 0, BW, BH); m.lineCap = 'round';
     for (let i = 0; i < 2600; i++) { const px = Math.random() * BW, py = Math.random() * BH, l = 30 + Math.random() * 120;
-      m.strokeStyle = ['rgba(120,84,56,.35)', 'rgba(220,180,140,.25)', 'rgba(90,60,40,.3)', 'rgba(170,130,96,.3)'][i % 4]; m.lineWidth = 3 + Math.random() * 8;
+      m.strokeStyle = ['rgba(90,58,36,.45)', 'rgba(230,190,146,.3)', 'rgba(60,38,24,.45)', 'rgba(170,128,90,.35)'][i % 4]; m.lineWidth = 3 + Math.random() * 8;
       m.beginPath(); m.moveTo(px, py); m.quadraticCurveTo(px + (Math.random() - .5) * 10, py + l / 2, px + (Math.random() - .5) * 8, py + l); m.stroke(); }
     for (let i = 0; i < 260; i++) { const px = Math.random() * BW, py = Math.random() * BH; // little horizontal breaks in the bark
       m.strokeStyle = 'rgba(60,36,20,.45)'; m.lineWidth = 2 + Math.random() * 2; m.beginPath(); m.moveTo(px, py); m.lineTo(px + 12 + Math.random() * 20, py + (Math.random() - .5) * 4); m.stroke(); }
@@ -504,7 +504,7 @@
     const knot = (kx, ky, s) => { [[1, '#5a3a22'], [0.75, '#c49a6a'], [0.52, '#7a5232'], [0.3, '#2a180c']].forEach(([k, col]) => { m.fillStyle = col; m.beginPath(); m.ellipse(kx, ky, s * k, s * k * 1.35, 0, 0, 7); m.fill(); }); };
     knot(BW * 0.31, BH * 0.6, 40); knot(BW * 0.78, BH * 0.42, 28);
     const t = new THREE.CanvasTexture(cm); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; return t; })();
-  const BARK_TONES = [new THREE.Color(0x2a1a14), new THREE.Color(0x6a4632), new THREE.Color(0xa87850), new THREE.Color(0xe0b47e)];
+  const BARK_TONES = [new THREE.Color(0x1c110c), new THREE.Color(0x4e3222), new THREE.Color(0x86593a), new THREE.Color(0xc89462)];
   const stumpSide = (() => {
     const { A, HS } = ST, pos = [], uv = [], col = [], idx = [], y0 = ST.bot;
     for (let j = 0; j <= HS; j++) { const t = j / HS;
