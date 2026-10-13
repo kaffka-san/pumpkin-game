@@ -462,7 +462,7 @@
   const stumpCap = (() => { const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), C = N / 2;
     // cap texture is polar: radius 0..0.86 = sawn wood, 0.86..0.9 = pale sapwood + dark cambium, 0.9..1 = the bark bevel
     x.fillStyle = '#2a1c14'; x.fillRect(0, 0, N, N);
-    const ringPath = (rr, wob, ph) => { x.beginPath(); for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2;
+    const ringPath = (rr, wob, ph, keep) => { if (!keep) x.beginPath(); for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2;
       const k = rr * (1 + wob * (Math.sin(3 * a + ph) * 0.6 + Math.sin(7 * a + ph * 2) * 0.4)); const px = C + 14 * (1 - rr / C) + Math.cos(a) * k, py = C - 9 * (1 - rr / C) + Math.sin(a) * k;
       i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); };
     const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#9a6a3c'); wood.addColorStop(0.6, '#c08a52'); wood.addColorStop(1, '#d6a86c');
@@ -486,7 +486,7 @@
     x.fillStyle = 'rgba(20,10,4,.45)'; x.beginPath(); x.arc(C + 14, C - 9, 7, 0, 7); x.fill(); // pith
     x.restore();
     ringPath(C * 0.86, 0.012, 0.5); x.strokeStyle = '#3a2416'; x.lineWidth = 4; x.stroke(); // cambium line
-    x.save(); x.beginPath(); x.arc(C, C, C, 0, 7); ringPath(C * 0.9, 0.01, 0); x.clip('evenodd'); // bark band over the bevel
+    x.save(); x.beginPath(); x.arc(C, C, C, 0, 7); x.closePath(); ringPath(C * 0.9, 0.01, 0, true); x.clip('evenodd'); // bark band over the bevel only
     x.fillStyle = '#3a281c'; x.fillRect(0, 0, N, N);
     for (let i = 0; i < 900; i++) { const a = Math.random() * 7, r = C * (0.9 + Math.random() * 0.1); x.fillStyle = ['#271a12', '#4c3626', '#5e4532', '#33241a'][i % 4];
       x.beginPath(); x.ellipse(C + Math.cos(a) * r, C + Math.sin(a) * r, 3 + Math.random() * 8, 2 + Math.random() * 3, a, 0, 7); x.fill(); }
