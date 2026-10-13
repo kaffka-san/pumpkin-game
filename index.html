@@ -715,16 +715,16 @@
   // face shapes: a dark cut lip on the skin, then the hole in the alpha mask
   function carveShape(pathFn, ring = 14) {
     // a thin darker lip where the skin was cut
-    colorX.save(); colorX.lineJoin = 'round'; colorX.shadowColor = 'rgba(70,22,4,.7)'; colorX.shadowBlur = ring * 1.6; pathFn(colorX); // soft, feathered lip
-    colorX.strokeStyle = 'rgba(96,34,8,.22)'; colorX.lineWidth = ring * 1.1; colorX.stroke();
-    colorX.strokeStyle = 'rgba(70,22,4,.45)'; colorX.lineWidth = ring * 0.4; colorX.stroke();
+    colorX.save(); colorX.lineJoin = 'round'; colorX.shadowColor = 'rgba(120,64,28,.45)'; colorX.shadowBlur = ring * 1.6; pathFn(colorX); // soft, feathered lip
+    colorX.strokeStyle = 'rgba(128,70,32,.14)'; colorX.lineWidth = ring * 1.1; colorX.stroke();
+    colorX.strokeStyle = 'rgba(120,64,28,.28)'; colorX.lineWidth = ring * 0.4; colorX.stroke();
     colorX.restore(); colorDirty = true;
     alphaX.fillStyle = '#000'; pathFn(alphaX); alphaX.fill();
   }
   // brush dabs: a pre-rendered dark lip sprite instead of a live blur
   const rindDab = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
     const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, 'rgba(70,22,4,.6)'); g.addColorStop(0.72, 'rgba(70,22,4,.55)'); g.addColorStop(0.85, 'rgba(96,34,8,.25)'); g.addColorStop(1, 'rgba(110,40,10,0)');
+    g.addColorStop(0, 'rgba(120,64,28,.38)'); g.addColorStop(0.72, 'rgba(120,64,28,.34)'); g.addColorStop(0.85, 'rgba(128,70,32,.15)'); g.addColorStop(1, 'rgba(128,70,32,0)');
     x.fillStyle = g; x.fillRect(0, 0, 64, 64); return c; })();
   function dab(x, y, rx, ry) {
     colorX.drawImage(rindDab, x - rx * 1.4, y - ry * 1.4, rx * 2.8, ry * 2.8); colorDirty = true;
@@ -867,7 +867,7 @@
   const wallGeo = [], wallMats = [];
   // Each layer's UVs are nudged by smooth noise that drifts with depth, so the cut edge wanders from layer to layer:
   // the wall reads as hand-cut (uneven ridges, knife chatter, slight undercuts) instead of a perfect smooth tube.
-  const LAYERS = 24, FLESH_TONES = [[0.05, 0.85, 0.36], [0.075, 0.88, 0.52], [0.115, 0.85, 0.72], [0.1, 0.82, 0.64], [0.075, 0.86, 0.5]]; // rind, under-rind, pale flesh, flesh, stringy inner
+  const LAYERS = 24, FLESH_TONES = [[0.065, 0.55, 0.4], [0.075, 0.68, 0.5], [0.09, 0.8, 0.6], [0.115, 0.85, 0.72], [0.1, 0.82, 0.64], [0.075, 0.86, 0.5]]; // brown lip blending into rind, flesh, stringy inner // rind, under-rind, pale flesh, flesh, stringy inner
   const fleshAt = t => { const k = t * (FLESH_TONES.length - 1), i = Math.min(FLESH_TONES.length - 2, Math.floor(k)), f = k - i, A = FLESH_TONES[i], B = FLESH_TONES[i + 1];
     return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f]; };
   for (let i = 0; i < LAYERS; i++) {
