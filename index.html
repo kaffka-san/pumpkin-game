@@ -468,8 +468,11 @@
     const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#9a6a3c'); wood.addColorStop(0.6, '#c08a52'); wood.addColorStop(1, '#d6a86c');
     ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#f0d29a'; x.fill(); // sapwood
     ringPath(C * 0.86, 0.012, 0.5); x.fillStyle = wood; x.fill();
-    for (let rr = C * 0.84, i = 0; rr > 6; rr -= 5 + Math.random() * 9 * (rr / C + 0.3), i++) { // growth rings: thin dark latewood lines
-      ringPath(rr, 0.006 + 0.012 * Math.random(), i * 0.37); x.strokeStyle = `rgba(70,38,16,${0.45 + Math.random() * 0.4})`; x.lineWidth = 1.5 + Math.random() * 3; x.stroke(); }
+    for (let rr = C * 0.85, i = 0; rr > 10; i++) { // growth rings as bold bands (thin lines blur away at a grazing view): dark latewood, then pale earlywood
+      const step = 12 + Math.random() * 16 * (rr / C + 0.25), wob = 0.006 + 0.01 * Math.random();
+      ringPath(rr, wob, i * 0.37); x.fillStyle = `rgba(96,52,22,${0.75 + Math.random() * 0.2})`; x.fill();
+      ringPath(rr - step * (0.28 + Math.random() * 0.12), wob, i * 0.37); x.fillStyle = wood; x.fill();
+      x.fillStyle = 'rgba(255,230,180,.12)'; x.fill(); rr -= step; }
     x.save(); ringPath(C * 0.86, 0.012, 0.5); x.clip();
     for (let i = 0; i < 140; i++) { const a = Math.random() * 7, r0 = Math.random() * C * 0.3, r1 = r0 + 40 + Math.random() * C * 0.5; // medullary rays
       x.strokeStyle = 'rgba(230,200,150,.08)'; x.lineWidth = 1; x.beginPath(); x.moveTo(C + Math.cos(a) * r0, C + Math.sin(a) * r0); x.lineTo(C + Math.cos(a) * r1, C + Math.sin(a) * r1); x.stroke(); }
