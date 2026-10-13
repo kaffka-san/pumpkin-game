@@ -414,9 +414,10 @@
 (() => {
   const stage = document.getElementById('stage');
   let renderer;
-  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+  try { renderer = new THREE.WebGLRenderer({ antialias: false }); } // everything goes through the bloom composer, which never used the canvas MSAA
   catch (e) { document.getElementById('fail').hidden = false; return; }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); // 1.5x looks the same as 2x here, with ~44% fewer pixels to shade and bloom
+  let prWanted = Math.min(devicePixelRatio, 1.5); // adaptive target; resize() also caps it by a pixel budget
+  renderer.setPixelRatio(prWanted);
   stage.appendChild(renderer.domElement);
 
   // ---------- scene ----------
@@ -1240,6 +1241,8 @@
   function resize() {
     const w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
+    const eff = Math.max(0.5, Math.min(prWanted, Math.sqrt(2.2e6 / (w * h)))); // never shade more than ~2.2M pixels, however big the window
+    renderer.setPixelRatio(eff); composer.setPixelRatio(eff);
     renderer.setSize(w, h, false); composer.setSize(w, h);
     camera.aspect = w / h;
     camera.fov = w < h * 1.1 ? 50 : 34; // narrow stages: wider lens so the pumpkin fits
@@ -1370,7 +1373,7 @@
     x.fillStyle = g; x.fillRect(0, h * 0.78, w, h * 0.22);
     const fs = Math.max(16, Math.round(Math.min(h * 0.045, w * 0.06)));
     x.fillStyle = '#f6eadb'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-    x.font = `500 ${fs}px "Cormorant Garamond", Georgia, serif`;
+    x.font = `800 ${fs}px "Grandstander", "Baloo 2", system-ui, sans-serif`;
     x.fillText('Carved at Pumpkin Parlor', w / 2, h - fs * 0.9);
     const url = c.toDataURL('image/png');
     $('saveImgEl').src = url; $('downloadLink').href = url;
@@ -1386,18 +1389,21 @@
   let prev = performance.now();
   // adaptive resolution: watch the real frame time and step the render resolution down when the GPU can't keep up,
   // back up when there's headroom. Keeps big windows and laptop GPUs smooth without hurting fast machines.
-  const PR_MAX = Math.min(devicePixelRatio, 1.5), PR_MIN = 0.6;
-  let pr = PR_MAX, frameAvg = 16.7, prCheck = performance.now() + 2500, fastStreak = 0;
+  const PR_MAX = prWanted, PR_MIN = 0.55;
+  let frameAvg = 16.7, prCheck = performance.now() + 2000, fastStreak = 0, slowAtFloor = 0;
   function adaptResolution(now, rawMs) {
     if (rawMs > 120 || document.hidden) return; // tab switches and hiccups aren't GPU load
     frameAvg += (rawMs - frameAvg) * 0.05;
     if (now < prCheck) return;
-    prCheck = now + 1200;
-    let next = pr;
-    if (frameAvg > 22 && pr > PR_MIN) { next = Math.max(PR_MIN, pr - 0.2); fastStreak = 0; } // under ~45 fps: step down
-    else if (frameAvg < 17.6 && pr < PR_MAX) { if (++fastStreak >= 4) { next = Math.min(PR_MAX, pr + 0.1); fastStreak = 0; } } // steady 60 fps: creep back up
+    prCheck = now + 900;
+    let next = prWanted;
+    if (frameAvg > 22) { // under ~45 fps
+      if (prWanted > PR_MIN) next = Math.max(PR_MIN, prWanted - 0.2);
+      else if (bloom.enabled && ++slowAtFloor >= 3) { bloom.enabled = false; frameAvg = 16.7; } // last resort: drop the glow pass
+      fastStreak = 0;
+    } else if (frameAvg < 17.6 && prWanted < PR_MAX) { if (++fastStreak >= 4) { next = Math.min(PR_MAX, prWanted + 0.1); fastStreak = 0; } } // steady 60 fps: creep back up
     else fastStreak = 0;
-    if (next !== pr) { pr = next; renderer.setPixelRatio(pr); composer.setPixelRatio(pr); resize(); frameAvg = 16.7; prCheck = now + 1500; }
+    if (next !== prWanted) { prWanted = next; resize(); frameAvg = 16.7; prCheck = now + 1200; }
   }
   renderer.setAnimationLoop(now => {
     adaptResolution(now, now - prev);
