@@ -1264,7 +1264,7 @@
   const stopAutoFit = () => { autoFit = false; };
   renderer.domElement.addEventListener('wheel', stopAutoFit, { passive: true });
   renderer.domElement.addEventListener('touchstart', e => { if (e.touches.length > 1) stopAutoFit(); }, { passive: true });
-  const refit = () => { if (autoFit && !flight) camera.position.copy(controls.target).add(camDir().setLength(fitDist())); };
+  const refit = () => { if (!autoFit || flight) return; const dir = camDir(); if (dir.lengthSq() < 1e-6) return; camera.position.copy(controls.target).add(dir.setLength(fitDist())); }; // read the direction before moving the camera
   addEventListener('resize', refit);
   if (window.ResizeObserver) new ResizeObserver(() => { resize(); refit(); }).observe(stage);
 
