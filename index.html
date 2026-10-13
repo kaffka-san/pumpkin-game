@@ -1252,19 +1252,36 @@
     camera.updateProjectionMatrix();
   }
   addEventListener('resize', resize); resize();
-  // distance at which the pumpkin's body fills FILL of the view along whichever side is tighter (its silhouette is a sphere-ish
-  // outline, so it's r / sqrt(D² - r²) that has to equal the visible half-extent at distance D). m scales the result.
-  const FILL = 0.7, BODY_HALF_W = 1.34, BODY_HALF_H = 0.9;
-  const fitDist = (m = 1) => { const vt = Math.tan(camera.fov * Math.PI / 360), ht = vt * camera.aspect;
-    const need = (r, t) => r * Math.sqrt(1 + 1 / ((FILL * t) ** 2));
-    return Math.min(controls.maxDistance, Math.max(controls.minDistance, Math.max(need(BODY_HALF_W, ht), need(BODY_HALF_H, vt)) * m)); };
+  // Framing: the whole pumpkin (stem and tendrils included) fills FILL_H of the view's height, but never more than FILL_W of its
+  // width, so tall phone screens get a pumpkin that spans the width instead of a small one lost in sky. Measured on the real
+  // silhouette: a sample of the pumpkin's vertices is projected from a test camera and the distance found by bisection.
+  const FILL_H = 0.7, FILL_W = 0.88;
+  const framePts = [];
+  pumpkin.updateMatrixWorld(true);
+  pumpkin.traverse(o => { if (!o.isMesh || o === inner || o === guide || wallMats.includes(o.material)) return;
+    const pa = o.geometry.attributes.position, step = Math.max(1, Math.floor(pa.count / 900));
+    for (let i = 0; i < pa.count; i += step) framePts.push(new THREE.Vector3().fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld)); });
+  { let y0 = Infinity, y1 = -Infinity; for (const q of framePts) { y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); } controls.target.y = (y0 + y1) / 2 - 0.05; } // aim at the middle of pumpkin + stem
+  const fitCam = new THREE.PerspectiveCamera(), fv = new THREE.Vector3();
+  function extentAt(dir, D) {
+    fitCam.fov = camera.fov; fitCam.aspect = camera.aspect; fitCam.near = camera.near; fitCam.far = camera.far; fitCam.updateProjectionMatrix();
+    fitCam.position.copy(controls.target).addScaledVector(dir, D); fitCam.lookAt(controls.target); fitCam.updateMatrixWorld();
+    let x0 = 1, x1 = -1, y0 = 1, y1 = -1;
+    for (const q of framePts) { fv.copy(q).project(fitCam); x0 = Math.min(x0, fv.x); x1 = Math.max(x1, fv.x); y0 = Math.min(y0, fv.y); y1 = Math.max(y1, fv.y); }
+    return [(x1 - x0) / 2, (y1 - y0) / 2];
+  }
+  function fitDist(m = 1, dir = FRONT) {
+    dir = dir.clone().normalize(); let lo = 1.5, hi = 20;
+    for (let i = 0; i < 22; i++) { const mid = (lo + hi) / 2, [w, h] = extentAt(dir, mid); if (w > FILL_W || h > FILL_H) lo = mid; else hi = mid; }
+    const d = hi * m; controls.maxDistance = Math.max(7, d * 1.35); controls.minDistance = Math.min(2.8, d * 0.6); return d;
+  }
   camera.position.copy(controls.target).addScaledVector(FRONT, fitDist());
   // keep that framing when the stage changes size (phone rotation, panel layout settling) until the player zooms themselves
   let autoFit = true;
   const stopAutoFit = () => { autoFit = false; };
   renderer.domElement.addEventListener('wheel', stopAutoFit, { passive: true });
   renderer.domElement.addEventListener('touchstart', e => { if (e.touches.length > 1) stopAutoFit(); }, { passive: true });
-  const refit = () => { if (!autoFit || flight) return; const dir = camDir(); if (dir.lengthSq() < 1e-6) return; camera.position.copy(controls.target).add(dir.setLength(fitDist())); }; // read the direction before moving the camera
+  const refit = () => { if (!autoFit || flight) return; const dir = camDir(); if (dir.lengthSq() < 1e-6) return; camera.position.copy(controls.target).add(dir.setLength(fitDist(1, dir))); }; // read the direction before moving the camera
   addEventListener('resize', refit);
   if (window.ResizeObserver) new ResizeObserver(() => { resize(); refit(); }).observe(stage);
 
@@ -1368,7 +1385,7 @@
     guide.visible = false; $('coach').hidden = true; $('toast').hidden = true;
     setTool('rotate'); $('hint').textContent = '';
     candle = true; $('candle').setAttribute('aria-checked', true);
-    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(faceDir(), fitDist(0.92), 1200))); // after the panel folds away
+    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(faceDir(), fitDist(0.95, faceDir()), 1200))); // after the panel folds away
     roomTarget = 0.5; litFrom = performance.now() + 250;
     setTimeout(() => { if (finished) $('finale').hidden = false; }, 1500);
   }
