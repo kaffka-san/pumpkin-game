@@ -443,14 +443,30 @@
   const ad = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
   const lumpR = a => ST.R * (1 + 0.025 * Math.sin(3 * a + 1.2) + 0.018 * Math.sin(5 * a + 0.4));
   const plate = (a, t) => a * 6 + t * 0.7 + 0.35 * Math.sin(a * 3 + 1) + 0.15 * Math.sin(a * 11 + t * 3); // 12 chunky plates that twist as they rise
+  // chipped-out bark (a, t, half-width in radians, half-height in t, depth) and one deep knot hole
+  const SIDE_CHIPS = [[1.2, 0.55, 0.09, 0.18, 0.06], [2.05, 0.35, 0.07, 0.14, 0.05], [0.55, 0.7, 0.06, 0.12, 0.045], [2.75, 0.62, 0.1, 0.16, 0.055],
+    [3.6, 0.45, 0.08, 0.2, 0.05], [4.4, 0.6, 0.07, 0.14, 0.05], [5.3, 0.4, 0.09, 0.16, 0.06], [1.65, 0.78, 0.05, 0.09, 0.04], [1.75, 0.42, 0.035, 0.06, 0.12]];
+  function sideDent(a, t) { let d = 0;
+    for (const [ca, ct, w, h, dep] of SIDE_CHIPS) { const e = (ad(a, ca) / w) ** 2 + ((t - ct) / h) ** 2; if (e < 1) d = Math.max(d, dep * Math.pow(1 - e, 0.45)); } // flat-bottomed, steep-walled
+    return d; }
   function sideR(a, t) { // t: 0 at the foot, 1 at the top of the bark
-    let r = lumpR(a) + 0.12 * Math.pow(1 - t, 2);
+    let r = lumpR(a) + 0.12 * Math.pow(1 - t, 2) - sideDent(a, t);
     ROOTS.forEach(([ra, amp, w]) => { const d = ad(a, ra) / w; r += amp * Math.exp(-d * d) * Math.pow(1 - t, 2.4); });
     const s = Math.abs(Math.sin(plate(a, t)));
     return r + 0.03 * Math.sqrt(s) - 0.11 * Math.pow(1 - s, 6); // rounded bulging plates, narrow deep furrows
   }
   const bevAt = a => 0.085 + 0.02 * Math.sin(5 * a + 1);
-  const edgeH = (a, r, R) => 0.012 * Math.sin(4 * a + r * 5) * Math.max(0, (r / R - 0.7) / 0.3); // a gently uneven top near the rim
+  // on the sawn top, outside the pumpkin's footprint: round knot and worm holes, and a few V-shaped axe chops
+  const TOP_PITS = [[0.9, 1.2, 0.09, 0.05], [1.85, 1.28, 0.06, 0.06], [2.5, 1.12, 0.12, 0.04], [3.5, 1.3, 0.07, 0.05], [5.6, 1.18, 0.1, 0.045], [1.35, 1.36, 0.04, 0.05]];
+  const AXE = [[1.55, 1.06, 1.42, 0.25, 0.045, 0.06], [2.2, 1.0, 1.38, -0.3, 0.035, 0.05], [0.3, 1.05, 1.4, 0.2, 0.04, 0.055], [4.0, 1.08, 1.42, -0.2, 0.04, 0.05]];
+  function topDent(px, pz) { let d = 0;
+    for (const [ang, rad, size, dep] of TOP_PITS) { const q = Math.hypot(px - Math.cos(ang) * rad, pz - Math.sin(ang) * rad) / size; if (q < 1) d = Math.max(d, dep * (1 - Math.pow(q, 4))); }
+    for (const [ang, r0, r1, skew, w, dep] of AXE) { // segment from r0 to r1 along a slightly skewed radial line
+      const ax = Math.cos(ang) * r0, az = Math.sin(ang) * r0, bx = Math.cos(ang + skew * 0.3) * r1, bz = Math.sin(ang + skew * 0.3) * r1;
+      const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz, s = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / L2)), q = Math.hypot(px - ax - vx * s, pz - az - vz * s) / w;
+      if (q < 1) d = Math.max(d, dep * (1 - q) * Math.sin(Math.PI * Math.min(1, s * 1.15))); }
+    return d; }
+  const edgeH = (a, r, R) => 0.012 * Math.sin(4 * a + r * 5) * Math.max(0, (r / R - 0.7) / 0.3) - topDent(Math.cos(a) * r, Math.sin(a) * r); // gently uneven, plus the chops and holes
   const paint = (cols, k) => { k = Math.min(1, Math.max(0, k)) * (cols.length - 1); const i = Math.min(cols.length - 2, Math.floor(k)), f = k - i; return cols[i].clone().lerp(cols[i + 1], f); };
   // sawn top: polar texture, honey wood with brushy rings and cracks, bark rim from 0.91
   const stumpCap = (() => { const N = 2048, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), C = N / 2;
@@ -513,15 +529,18 @@
         pos.push(Math.cos(a) * r, y, Math.sin(a) * r); uv.push(i / A * 3, t);
         const ph = plate(am, t), s = Math.abs(Math.sin(ph)), groove = Math.pow(1 - s, 4), lit = 0.5 + 0.5 * Math.cos(ph) * Math.sign(Math.sin(ph) || 1);
         const k = 0.15 + 0.55 * t + 0.25 * lit * s - 0.6 * groove + 0.12 * Math.pow(s, 8); // grooves sink into shadow, plate crowns catch the light, the foot stays dark
-        const cc = paint(BARK_TONES, k); col.push(cc.r, cc.g, cc.b); } }
+        const cc = paint(BARK_TONES, k), ch = sideDent(am, t);
+        if (ch > 0.09) cc.lerp(new THREE.Color(0x120a06), Math.min(1, (ch - 0.09) * 30)); // knot hole
+        else if (ch > 0) cc.lerp(new THREE.Color(0xd8a46a), Math.min(0.85, ch * 22)); // bark knocked off, light wood underneath
+        col.push(cc.r, cc.g, cc.b); } }
     for (let j = 0; j < HS; j++) for (let i = 0; i < A; i++) { const a = j * (A + 1) + i, b = a + A + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(idx); g.computeVertexNormals(); return g; })();
   const stumpTopGeo = (() => { // the sawn face, then a thick rounded rim with a painted highlight along its crown
-    const { A } = ST, RINGS = 30, BEV = 10, pos = [0, ST.top, 0], uv = [0.5, 0.5], col = [1, 1, 1], idx = [];
+    const { A } = ST, RINGS = 56, BEV = 10, pos = [0, ST.top, 0], uv = [0.5, 0.5], col = [1, 1, 1], idx = [];
     for (let k = 1; k <= RINGS + BEV; k++) for (let i = 0; i <= A; i++) {
       const a = i / A * Math.PI * 2, am = a % (Math.PI * 2), R = sideR(am, 1), bv = bevAt(am); let r, y, shade;
-      if (k <= RINGS) { const f = 1 - Math.pow(1 - k / RINGS, 1.5); r = (R - bv) * f; y = ST.top + edgeH(am, r, R); shade = 1 - 0.12 * Math.pow(f, 4); }
+      if (k <= RINGS) { const f = 1 - Math.pow(1 - k / RINGS, 1.5); r = (R - bv) * f; y = ST.top + edgeH(am, r, R); shade = (1 - 0.12 * Math.pow(f, 4)) * (1 - Math.min(0.65, topDent(Math.cos(am) * r, Math.sin(am) * r) * 13)); }
       else { const e = (k - RINGS) / BEV, q = e * Math.PI / 2; r = R - bv + Math.sin(q) * bv; y = ST.top + edgeH(am, R - bv, R) - (1 - Math.cos(q)) * bv;
         const z = (e - 0.3) / 0.2; shade = 0.9 + 0.4 * Math.exp(-z * z) - 0.45 * e; } // bright worn crown, darker as it rolls down
       const f = Math.min(1, r / (lumpR(am) + 0.04));
@@ -781,18 +800,29 @@
   function redraw() { carvedArea = 0; paintBase(); items.forEach(applyItem); texDirty = true; }
 
   // ---------- pumpkin ----------
+  // hand-sculpted feel: thumb-press dents, a few soft lumps and faint tool strokes along the ribs.
+  // Seeded, and keyed to direction, so the skin, flesh layers, guide and hit proxy all deform identically.
+  const seeded = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const SCULPT = (() => { const rnd = seeded(11), out = [];
+    for (let i = 0; i < 46; i++) { const y = -0.55 + rnd() * 1.25, ang = rnd() * Math.PI * 2, rr = Math.sqrt(1 - y * y), bump = i % 6 === 0;
+      out.push([Math.cos(ang) * rr, y, Math.sin(ang) * rr, 0.1 + rnd() * 0.2, bump ? 0.008 + rnd() * 0.01 : -(0.01 + rnd() * 0.022)]); }
+    return out; })();
+  function sculptAt(ux, uy, uz, a) {
+    let k = 1 + 0.0045 * Math.sin(a * 46 + uy * 6 + Math.sin(a * 9) * 2) * (1 - uy * uy);
+    for (const [dx, dy, dz, rad, amt] of SCULPT) { const th = Math.acos(Math.min(1, ux * dx + uy * dy + uz * dz)); if (th < rad) { const q = 1 - (th / rad) ** 2; k += amt * q * q; } }
+    return k; }
   function pumpkinGeometry(scale, ws = 160, hs = 100) {
     const geo = new THREE.SphereGeometry(1, ws, hs), p = geo.attributes.position, v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
-      const a = Math.atan2(v.z, v.x);
+      const a = Math.atan2(v.z, v.x), sk = sculptAt(v.x, v.y, v.z, a);
       const rib = 0.86 + 0.14 * Math.pow(Math.abs(Math.sin(5 * a)), 0.38); // fat rounded lobes, deep narrow creases
       const wob = 1 + 0.04 * Math.sin(a + 0.7) + 0.02 * Math.sin(2 * a + 2.1); // one side a touch fuller
       const bulge = 1 + 0.1 * (1 - v.y * v.y) - 0.04 * v.y; // wide and squat, fullest just below the middle
       v.x *= rib * wob * bulge * 1.16; v.z *= rib * wob * bulge * 1.16; v.y *= 0.88 * (1 + 0.04 * Math.sin(a - 0.5));
       const rxz = Math.hypot(v.x, v.z);
       v.y -= v.y > 0 ? 0.26 * Math.exp(-rxz * rxz / 0.18) : -0.14 * Math.exp(-rxz * rxz / 0.12); // sunken stem well, flat-ish base
-      v.multiplyScalar(scale);
+      v.multiplyScalar(scale * sk);
       p.setXYZ(i, v.x, v.y, v.z);
     }
     geo.computeVertexNormals();
