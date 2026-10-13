@@ -537,7 +537,7 @@
     g.setIndex(idx); g.computeVertexNormals(); return g; })();
   const stump = new THREE.Group(); scene.add(stump);
   stump.add(new THREE.Mesh(stumpSide, new THREE.MeshStandardMaterial({ map: stumpBark, bumpMap: stumpBark, bumpScale: 0.03, roughness: 0.97 })));
-  stump.add(new THREE.Mesh(stumpTopGeo, new THREE.MeshStandardMaterial({ map: stumpCap, bumpMap: stumpCap, bumpScale: 0.012, roughness: 0.85 })));
+  stump.add(new THREE.Mesh(stumpTopGeo, new THREE.MeshStandardMaterial({ map: stumpCap, emissiveMap: stumpCap, emissive: 0x6a5040, bumpMap: stumpCap, bumpScale: 0.012, roughness: 0.85 })));
   // a few little toadstools tucked between the roots
   const shroomCap = new THREE.MeshStandardMaterial({ color: 0xc94a3a, roughness: 0.6, emissive: 0x2a0806 }), shroomStem = new THREE.MeshStandardMaterial({ color: 0xeee0c8, roughness: 0.8 });
   const dotTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'); x.fillStyle = '#c94a3a'; x.fillRect(0, 0, 256, 128);
