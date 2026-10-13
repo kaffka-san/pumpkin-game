@@ -465,12 +465,12 @@
     const ringPath = (rr, wob, ph, keep) => { if (!keep) x.beginPath(); for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2;
       const k = rr * (1 + wob * (Math.sin(3 * a + ph) * 0.6 + Math.sin(7 * a + ph * 2) * 0.4)); const px = C + 14 * (1 - rr / C) + Math.cos(a) * k, py = C - 9 * (1 - rr / C) + Math.sin(a) * k;
       i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); };
-    const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#9a6a3c'); wood.addColorStop(0.6, '#c08a52'); wood.addColorStop(1, '#d6a86c');
-    ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#f0d29a'; x.fill(); // sapwood
+    const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#6e4a2c'); wood.addColorStop(0.6, '#8c6038'); wood.addColorStop(1, '#a37448');
+    ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#c49a64'; x.fill(); // sapwood
     ringPath(C * 0.86, 0.012, 0.5); x.fillStyle = wood; x.fill();
     for (let rr = C * 0.85, i = 0; rr > 10; i++) { // growth rings as bold bands (thin lines blur away at a grazing view): dark latewood, then pale earlywood
       const step = 12 + Math.random() * 16 * (rr / C + 0.25), wob = 0.006 + 0.01 * Math.random();
-      ringPath(rr, wob, i * 0.37); x.fillStyle = `rgba(96,52,22,${0.75 + Math.random() * 0.2})`; x.fill();
+      ringPath(rr, wob, i * 0.37); x.fillStyle = `rgba(62,34,16,${0.7 + Math.random() * 0.2})`; x.fill();
       ringPath(rr - step * (0.28 + Math.random() * 0.12), wob, i * 0.37); x.fillStyle = wood; x.fill();
       x.fillStyle = 'rgba(255,230,180,.12)'; x.fill(); rr -= step; }
     x.save(); ringPath(C * 0.86, 0.012, 0.5); x.clip();
@@ -493,7 +493,7 @@
     x.restore();
     const P = (a, f) => [C + Math.cos(a) * f * C, C + Math.sin(a) * f * C];
     { x.save(); x.beginPath(); x.moveTo(...P(NOTCH - 0.4, 0.66)); for (let i = 0; i <= 20; i++) x.lineTo(...P(NOTCH - 0.4 + i / 20 * 0.8, 0.9)); x.lineTo(...P(NOTCH + 0.4, 0.66)); x.closePath(); x.clip(); // notch: paler, freshly sawn
-      const g2 = x.createRadialGradient(...P(NOTCH, 0.85), 0, ...P(NOTCH, 0.85), C * 0.3); g2.addColorStop(0, 'rgba(250,224,170,.55)'); g2.addColorStop(1, 'rgba(250,224,170,0)'); x.fillStyle = g2; x.fillRect(0, 0, N, N);
+      const g2 = x.createRadialGradient(...P(NOTCH, 0.85), 0, ...P(NOTCH, 0.85), C * 0.3); g2.addColorStop(0, 'rgba(220,180,125,.35)'); g2.addColorStop(1, 'rgba(250,224,170,0)'); x.fillStyle = g2; x.fillRect(0, 0, N, N);
       x.restore(); }
     for (let i = 0; i < 260; i++) { const a = HINGE + (Math.random() - .5) * 1.1, f = 0.8 + Math.random() * 0.1, l = 0.01 + Math.random() * 0.04; // hinge: torn fibres
       x.strokeStyle = Math.random() < .55 ? `rgba(226,190,136,${0.4 + Math.random() * 0.4})` : `rgba(48,28,14,${0.4 + Math.random() * 0.3})`;
@@ -540,7 +540,7 @@
     g.setIndex(idx); g.computeVertexNormals(); return g; })();
   const stump = new THREE.Group(); scene.add(stump);
   stump.add(new THREE.Mesh(stumpSide, new THREE.MeshStandardMaterial({ map: stumpBark, bumpMap: stumpBark, bumpScale: 0.03, roughness: 0.97 })));
-  stump.add(new THREE.Mesh(stumpTopGeo, new THREE.MeshStandardMaterial({ map: stumpCap, emissiveMap: stumpCap, emissive: 0x6a5040, bumpMap: stumpCap, bumpScale: 0.012, roughness: 0.85 })));
+  stump.add(new THREE.Mesh(stumpTopGeo, new THREE.MeshStandardMaterial({ map: stumpCap, emissiveMap: stumpCap, emissive: 0x1e140c, bumpMap: stumpCap, bumpScale: 0.012, roughness: 0.85 })));
   // a few little toadstools tucked between the roots
   const shroomCap = new THREE.MeshStandardMaterial({ color: 0xc94a3a, roughness: 0.6, emissive: 0x2a0806 }), shroomStem = new THREE.MeshStandardMaterial({ color: 0xeee0c8, roughness: 0.8 });
   const dotTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'); x.fillStyle = '#c94a3a'; x.fillRect(0, 0, 256, 128);
