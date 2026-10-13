@@ -1,11 +1,14 @@
 # Pumpkin Parlor
 
-A little Halloween game: pick a personality, carve a painterly 3D pumpkin, and light the candle inside.
+A tiny Halloween game for carving a 3D jack-o'-lantern in the browser.
 
 **Play:** https://kaffka-san.github.io/pumpkin-game/
 
-- Drag beside the pumpkin to turn it.
-- Press **Carve pumpkin**, then draw on the pumpkin to cut it. The width slider sets the cut size.
-- Pick **Happy**, **Spooky**, **Surprised** or **Sleepy** for guide lines to trace, or **Blank** to carve freely.
+## How to play
+- **Carve** tool (C): draw on the pumpkin. An open line makes a thin slit; close a loop to cut the piece out.
+- **Rotate** tool (R): drag to turn the pumpkin. Zoom with the buttons or the scroll wheel; **Front view** (F) turns the face back to you.
+- Undo / Redo (Ctrl+Z, Ctrl+Shift+Z). Start over can be undone too.
+- Pick a face guide if you want dashed lines to trace.
+- **Finish & light it** hides the tools, dims the room and lights the candle. Then **Save image** or **Keep carving**.
 
-It's a single `index.html` with no build step. It loads [three.js](https://threejs.org) 0.128 from a CDN, so it needs an internet connection.
+One self-contained `index.html` (three.js from a CDN), hosted free on GitHub Pages.

@@ -4,10 +4,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Outfit:wght@300;400;500&display=swap">
 <style>
-  /* Layout: one rounded card filling the window; the 3D stage on top, a ruled control bar below (stacks on phones) */
+  /* Layout: the 3D stage takes the window; a slim tool panel docks right on desktop and becomes a compact tray under the stage on phones */
   :root {
     --page: #140c1d;
     --card: #1b1227;
+    --panel: #1e1430;
     --line: rgba(214, 190, 255, .12);
     --line-strong: rgba(214, 190, 255, .22);
     --ink: #f6eadb;
@@ -16,6 +17,7 @@
     --accent-ink: #2a1408;
     --picked: rgba(247, 163, 92, .14);
     --track: #3a2a50;
+    --glass: rgba(27, 18, 39, .72);
     --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
     --body: "Outfit", "Avenir Next", system-ui, sans-serif;
     color-scheme: dark;
@@ -23,115 +25,269 @@
   [hidden] { display: none !important; }
   *, *::before, *::after { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--body); padding: 16px; }
-  .card {
-    height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto;
-    background: var(--card); border: 1px solid var(--line); border-radius: 28px; overflow: hidden;
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--body); padding: 12px; }
+  button { font-family: inherit; }
+
+  .app {
+    height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 24px; overflow: hidden;
     box-shadow: 0 30px 80px rgba(0,0,0,.45);
   }
-  .stage { position: relative; min-height: 0; }
+  .app.finished { grid-template-columns: minmax(0, 1fr) 0; }
+  .app.finished .panel { visibility: hidden; }
+
+  .stage { position: relative; min-height: 0; min-width: 0; }
   #stage { position: absolute; inset: 0; touch-action: none; }
-  #stage canvas { display: block; width: 100%; height: 100%; cursor: grab; }
-  #stage.carving canvas { cursor: crosshair; }
-  .eyebrow { margin: 0; font-size: .72rem; font-weight: 400; letter-spacing: .38em; text-transform: uppercase; color: var(--muted); }
-  .masthead { position: absolute; top: 28px; left: 40px; pointer-events: none; display: flex; flex-direction: column; gap: 6px; }
-  h1 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 3rem; line-height: 1; letter-spacing: .005em; color: var(--ink); }
-  .masthead .sub { color: var(--ink); opacity: .85; }
-  .masthead .tag { margin-top: 44px; }
-  .moon { position: absolute; top: 34px; right: 40px; width: 46px; height: 46px; color: #f8e6c8; filter: drop-shadow(0 0 10px rgba(255,230,190,.35)); pointer-events: none; }
-  .hint { position: absolute; left: 0; right: 0; bottom: 18px; margin: 0; text-align: center; font-size: .95rem; letter-spacing: .14em; color: var(--muted); pointer-events: none; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+  #stage canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #stage.rotate canvas { cursor: grab; }
+  #stage.rotate canvas:active { cursor: grabbing; }
+  .masthead { position: absolute; top: 20px; left: 24px; pointer-events: none; display: flex; flex-direction: column; gap: 4px; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 1.9rem; line-height: 1; color: var(--ink); }
+  .eyebrow { margin: 0; font-size: .66rem; font-weight: 400; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); }
+  .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px; margin: 0; max-width: calc(100% - 32px); text-align: center; font-size: .9rem; letter-spacing: .06em; color: var(--muted); pointer-events: none; text-shadow: 0 1px 8px rgba(0,0,0,.7); }
 
-  .bar { border-top: 1px solid var(--line-strong); padding: 26px 40px 28px; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 22px 40px; }
-  .pick { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .moods { display: grid; grid-template-columns: repeat(5, 8.6rem); gap: 10px; }
-  .btn {
-    font: 400 1.05rem var(--body); color: var(--ink); background: transparent;
-    border: 1px solid var(--line-strong); border-radius: 12px; padding: 13px 18px; cursor: pointer;
-    transition: border-color .15s, background .15s, color .15s;
+  .view-tools { position: absolute; right: 16px; top: 16px; display: flex; gap: 6px; }
+  .icon-btn {
+    width: 40px; height: 40px; display: grid; place-items: center; padding: 0;
+    color: var(--ink); background: var(--glass); border: 1px solid var(--line-strong); border-radius: 12px; cursor: pointer;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .btn:hover { border-color: rgba(247,163,92,.55); }
-  .btn:focus-visible, input[type=range]:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .moods .btn[aria-pressed="true"] { background: var(--picked); border-color: var(--accent); color: var(--accent); }
-  .status { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; color: var(--muted); font-size: .98rem; letter-spacing: .04em; }
-  .link { font: inherit; font-size: .88rem; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
-  .link:hover { color: var(--ink); }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn.wide { width: auto; padding: 0 12px; gap: 6px; display: inline-flex; align-items: center; font-size: .85rem; }
+  .icon-btn:hover { border-color: rgba(247,163,92,.55); }
 
-  .tools { width: 27rem; max-width: 100%; display: flex; flex-direction: column; gap: 10px; }
-  .width-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.05rem; }
+  .coach {
+    position: absolute; left: 16px; bottom: 16px; width: 270px; max-width: calc(100% - 32px);
+    background: var(--glass); border: 1px solid var(--line-strong); border-radius: 16px; padding: 12px 14px;
+    display: grid; grid-template-columns: 84px 1fr; gap: 6px 12px; align-items: center;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .coach svg { grid-row: span 2; width: 84px; height: 70px; }
+  .coach p { margin: 0; font-size: .86rem; line-height: 1.4; color: var(--ink); }
+  .coach p b { color: var(--accent); font-weight: 500; }
+  .coach .btn { justify-self: start; padding: 5px 12px; font-size: .82rem; border-radius: 9px; }
+  .demo-path { stroke-dasharray: 150; stroke-dashoffset: 150; animation: draw 3.4s ease-in-out infinite; }
+  .demo-fill { opacity: 0; animation: pop 3.4s ease-in-out infinite; }
+  .demo-knife { offset-path: path("M30 44 L42 22 L54 44 Z"); animation: knife 3.4s ease-in-out infinite; }
+  @keyframes draw { 0% { stroke-dashoffset: 150; } 45%, 100% { stroke-dashoffset: 0; } }
+  @keyframes pop { 0%, 48% { opacity: 0; } 58%, 88% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes knife { 0% { offset-distance: 0%; opacity: 1; } 45% { offset-distance: 100%; opacity: 1; } 55%, 100% { offset-distance: 100%; opacity: 0; } }
+
+  .finale {
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+    background: var(--glass); border: 1px solid var(--line-strong); border-radius: 18px; padding: 14px 16px 14px 20px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    animation: rise .6s ease-out both;
+  }
+  .finale h2 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 1.5rem; }
+  .finale .row { display: flex; gap: 10px; }
+  @keyframes rise { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  .toast {
+    position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+    background: var(--glass); border: 1px solid var(--line-strong); border-radius: 12px; padding: 8px 10px 8px 14px;
+    display: flex; align-items: center; gap: 12px; font-size: .88rem; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .toast .btn { padding: 4px 10px; font-size: .82rem; }
+
+  .panel { border-left: 1px solid var(--line-strong); background: var(--panel); padding: 20px 18px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; min-height: 0; }
+  .group { display: flex; flex-direction: column; gap: 10px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border: 1px solid var(--line-strong); border-radius: 14px; }
+  .seg button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 6px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: .98rem; cursor: pointer; }
+  .seg button svg { width: 19px; height: 19px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+
+  .btn {
+    font: 400 .98rem var(--body); color: var(--ink); background: transparent;
+    border: 1px solid var(--line-strong); border-radius: 12px; padding: 10px 14px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: border-color .15s, background .15s, color .15s, opacity .15s;
+  }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .btn:hover:not(:disabled) { border-color: rgba(247,163,92,.55); }
+  .btn:disabled { opacity: .38; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  .btn.primary:hover:not(:disabled) { background: #ffb575; }
+  .btn:focus-visible, .seg button:focus-visible, .icon-btn:focus-visible, .mood:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .edit .full { grid-column: 1 / -1; }
+
+  .width-head { display: flex; justify-content: space-between; align-items: baseline; font-size: .95rem; }
   .width-head output { color: var(--accent); font-variant-numeric: tabular-nums; }
-  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .92rem; margin-top: -2px; }
-  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; cursor: pointer; margin: 0; }
-  input[type=range]::-webkit-slider-runnable-track { height: 10px; border-radius: 6px; background: linear-gradient(to right, var(--accent) var(--fill, 30%), var(--track) var(--fill, 30%)); }
-  input[type=range]::-moz-range-track { height: 10px; border-radius: 6px; background: var(--track); }
-  input[type=range]::-moz-range-progress { height: 10px; border-radius: 6px; background: var(--accent); }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -8px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; box-shadow: 0 0 12px rgba(247,163,92,.6); }
-  input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; }
-  .actions { display: flex; justify-content: flex-end; gap: 14px; margin-top: 12px; }
-  .actions .btn { min-width: 9.5rem; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; min-width: 12rem; }
-  .btn.primary:hover { background: #ffb575; }
-  .btn.primary[aria-pressed="true"] { background: transparent; color: var(--accent); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; cursor: pointer; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 6px; background: linear-gradient(to right, var(--accent) var(--fill, 30%), var(--track) var(--fill, 30%)); }
+  input[type=range]::-moz-range-track { height: 8px; border-radius: 6px; background: var(--track); }
+  input[type=range]::-moz-range-progress { height: 8px; border-radius: 6px; background: var(--accent); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; box-shadow: 0 0 12px rgba(247,163,92,.6); }
+  input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid #ffd2a6; }
+  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; margin-top: -4px; }
+
+  .moods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mood {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 7px;
+    background: transparent; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink); font-size: .8rem; cursor: pointer;
+  }
+  .mood svg { width: 44px; height: 40px; }
+  .mood:hover { border-color: rgba(247,163,92,.55); }
+  .mood[aria-pressed="true"] { background: var(--picked); border-color: var(--accent); color: var(--accent); }
+  .switch { display: flex; align-items: center; justify-content: space-between; font-size: .95rem; }
+  .switch button { width: 48px; height: 28px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--track); position: relative; cursor: pointer; padding: 0; }
+  .switch button::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+  .switch button[aria-checked="true"] { background: rgba(247,163,92,.35); border-color: var(--accent); }
+  .switch button[aria-checked="true"]::after { transform: translateX(20px); background: var(--accent); }
+  .switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .spacer { flex: 1; }
+  .finish-note { margin: -12px 0 0; font-size: .8rem; color: var(--muted); text-align: center; }
+
+  .modal { position: fixed; inset: 0; background: rgba(10,6,16,.78); display: grid; place-items: center; padding: 16px; z-index: 10; }
+  .modal-card { background: var(--card); border: 1px solid var(--line-strong); border-radius: 18px; padding: 16px; width: min(560px, 100%); display: flex; flex-direction: column; gap: 12px; }
+  .modal-card img { width: 100%; border-radius: 12px; display: block; }
+  .modal-card p { margin: 0; font-size: .88rem; color: var(--muted); }
+  .modal-card .row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  a.btn { text-decoration: none; }
 
   #fail { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--muted); }
 
-  @media (max-width: 1180px) { .moods { grid-template-columns: repeat(3, minmax(0, 8.6rem)); } }
-  @media (max-width: 700px) {
-    body { padding: 10px; }
-    .card { border-radius: 20px; }
-    .masthead { top: 18px; left: 20px; gap: 4px; }
-    h1 { font-size: 2.1rem; }
-    .eyebrow { font-size: .6rem; letter-spacing: .3em; }
-    .masthead .tag { display: none; }
-    .moon { top: 20px; right: 20px; width: 32px; height: 32px; }
-    .hint { bottom: 10px; font-size: .82rem; }
-    .bar { padding: 16px 18px 18px; gap: 14px; }
-    .pick { gap: 10px; width: 100%; }
+  @media (max-width: 760px) {
+    body { padding: 8px; }
+    .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; border-radius: 18px; }
+    .app.finished { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 0; }
+    .masthead { top: 14px; left: 16px; }
+    h1 { font-size: 1.5rem; }
+    .masthead .eyebrow { display: none; }
+    .view-tools { top: 10px; right: 10px; }
+    .icon-btn { width: 36px; height: 36px; }
+    .icon-btn.wide { width: 36px; padding: 0; font-size: 0; gap: 0; }
+    .hint { bottom: 8px; font-size: .78rem; }
+    .coach { left: 8px; right: 8px; bottom: 32px; width: auto; }
+    .finale { bottom: 12px; padding: 12px; }
+    .panel { border-left: 0; border-top: 1px solid var(--line-strong); padding: 10px 12px 12px; gap: 10px; max-height: 46vh;
+      display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+    .panel .eyebrow { display: none; }
+    .group { gap: 6px; }
+    .g-tool { grid-column: 1; }
+    .g-edit { grid-column: 2; }
+    .edit { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .edit .full { grid-column: auto; }
+    .edit .btn { padding: 8px 4px; font-size: .8rem; gap: 4px; }
+    .edit .btn span { display: none; }
+    .seg button { padding: 8px 4px; font-size: .85rem; }
+    .g-moods { grid-column: 1 / -1; }
     .moods { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-    .moods .btn { padding: 10px 2px; font-size: .8rem; border-radius: 10px; }
-    .tools { width: 100%; gap: 6px; }
-    .actions { margin-top: 6px; }
-    .actions .btn { flex: 1; min-width: 0; padding: 11px 8px; }
+    .mood { padding: 5px 2px; font-size: .7rem; }
+    .mood svg { width: 32px; height: 28px; }
+    .g-width { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 10px; }
+    .g-width .width-head { flex: none; gap: 8px; }
+    .g-width .ends { display: none; }
+    .spacer { display: none; }
+    .g-candle { grid-column: 1; }
+    .g-finish { grid-column: 2; }
+    .finish-note { display: none; }
+    .g-finish .btn { width: 100%; padding: 9px 6px; }
   }
-  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .switch button::after { transition: none; }
+    .demo-path, .demo-fill, .demo-knife, .finale { animation: none; }
+    .demo-path { stroke-dashoffset: 0; } .demo-fill { opacity: 1; }
+  }
 </style>
 </head><body>
 
-<main class="card">
+<main class="app" id="app">
   <section class="stage">
-    <div id="stage"></div>
+    <div id="stage" class="carve"></div>
     <div class="masthead">
       <h1>Pumpkin Parlor</h1>
-      <p class="eyebrow sub">A little Halloween ritual</p>
-      <p class="eyebrow tag">Carve a little personality</p>
+      <p class="eyebrow">A little Halloween ritual</p>
     </div>
-    <svg class="moon" viewBox="0 0 48 48" aria-hidden="true"><path fill="currentColor" d="M30 6 A19 19 0 1 0 43 34 A16 16 0 1 1 30 6z"/></svg>
-    <p class="hint" id="hint">Drag to turn your pumpkin</p>
+    <div class="view-tools">
+      <button class="icon-btn" id="zoomOut" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M16.5 16.5L21 21"/></svg></button>
+      <button class="icon-btn" id="zoomIn" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M16.5 16.5L21 21"/></svg></button>
+      <button class="icon-btn wide" id="frontView" title="Turn the face toward you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M9 12h.01M15 12h.01M9 16q3 2 6 0"/></svg>Front view</button>
+    </div>
+    <p class="hint" id="hint">Draw on the pumpkin to carve. Close a loop to cut a piece out.</p>
+
+    <div class="coach" id="coach" hidden>
+      <svg viewBox="0 0 84 70" aria-hidden="true">
+        <ellipse cx="42" cy="38" rx="38" ry="30" fill="#c8571c"/>
+        <path d="M22 12 q20 -8 40 0" stroke="#6f7a3c" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path class="demo-fill" d="M30 44 L42 22 L54 44 Z" fill="#ffd27a"/>
+        <path class="demo-path" d="M30 44 L42 22 L54 44 Z" fill="none" stroke="#fff1d6" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle class="demo-knife" r="3.5" fill="#fff"/>
+      </svg>
+      <p><b>Close the loop</b> to cut the piece out. An open line makes a thin slit.</p>
+      <button class="btn" id="coachOk">Got it</button>
+    </div>
+
+    <div class="finale" id="finale" hidden>
+      <h2>Your pumpkin is lit</h2>
+      <div class="row">
+        <button class="btn" id="keepCarving"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 3L8 15l-2-2z"/><path d="M8 15l-4.5 4.5a1.4 1.4 0 0 0 2 2L10 17z" fill="currentColor"/></svg>Keep carving</button>
+        <button class="btn primary" id="saveImg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Save image</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden><span id="toastText"></span><button class="btn" id="toastUndo">Undo</button></div>
   </section>
 
-  <section class="bar">
-    <div class="pick">
-      <p class="eyebrow">Pick a personality</p>
-      <div class="moods" role="group" aria-label="Personality">
-        <button class="btn" data-face="blank" aria-pressed="true">Blank</button>
-        <button class="btn" data-face="happy" aria-pressed="false">Happy</button>
-        <button class="btn" data-face="scary" aria-pressed="false">Spooky</button>
-        <button class="btn" data-face="surprised" aria-pressed="false">Surprised</button>
-        <button class="btn" data-face="sleepy" aria-pressed="false">Sleepy</button>
+  <aside class="panel" aria-label="Carving tools">
+    <div class="group g-tool">
+      <p class="eyebrow">Tool</p>
+      <div class="seg" role="group" aria-label="Tool">
+        <button id="toolCarve" aria-pressed="true" title="Carve (C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 3L8 15l-2-2z"/><path d="M8 15l-4.5 4.5a1.4 1.4 0 0 0 2 2L10 17z" fill="currentColor"/></svg>Carve</button>
+        <button id="toolRotate" aria-pressed="false" title="Rotate (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M17.5 2.5V7H13"/></svg>Rotate</button>
       </div>
-      <p class="status"><span id="status">Your blank pumpkin is ready for your own design.</span>
-        <span><button class="link" id="undo">Undo</button> · <button class="link" id="newPumpkin">Start over</button></span></p>
     </div>
-    <div class="tools">
-      <label class="width-head" for="knifeSize"><span>Carving width</span><output id="sizeOut" for="knifeSize">10 px</output></label>
+
+    <div class="group g-edit">
+      <p class="eyebrow">Edit</p>
+      <div class="edit">
+        <button class="btn" id="undo" disabled title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5L4 10l5 5"/><path d="M4 10h10a6 6 0 0 1 0 12h-3"/></svg><span>Undo</span></button>
+        <button class="btn" id="redo" disabled title="Redo (Ctrl+Shift+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l5 5-5 5"/><path d="M20 10H10a6 6 0 0 0 0 12h3"/></svg><span>Redo</span></button>
+        <button class="btn full" id="newPumpkin" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/></svg><span>Start over</span></button>
+      </div>
+    </div>
+
+    <div class="group g-width">
+      <label class="width-head" for="knifeSize"><span>Knife width</span><output id="sizeOut" for="knifeSize">10 px</output></label>
       <input type="range" id="knifeSize" min="4" max="30" value="10">
       <div class="ends" aria-hidden="true"><span>Thin</span><span>Wide</span></div>
-      <div class="actions">
-        <button class="btn" id="candle" aria-pressed="true">Candle on</button>
-        <button class="btn primary" id="carveBtn" aria-pressed="false">Carve pumpkin</button>
+    </div>
+
+    <div class="group g-moods">
+      <p class="eyebrow">Face guide</p>
+      <div class="moods" role="group" aria-label="Face guide">
+        <button class="mood" data-face="blank" aria-pressed="true"><svg viewBox="0 0 44 40" aria-hidden="true"><ellipse cx="22" cy="22" rx="19" ry="16" fill="#c8571c"/><path d="M22 6q1-4 4-5" stroke="#7a8a34" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>Blank</button>
+        <button class="mood" data-face="happy" aria-pressed="false"><svg viewBox="0 0 44 40" aria-hidden="true"><ellipse cx="22" cy="22" rx="19" ry="16" fill="#c8571c"/><path d="M22 6q1-4 4-5" stroke="#7a8a34" stroke-width="2.5" fill="none" stroke-linecap="round"/><g fill="#ffd27a"><path d="M11 21l4-7 4 7z"/><path d="M25 21l4-7 4 7z"/><path d="M10 26q12 9 24 0q-3 7-12 7t-12-7z"/></g></svg>Happy</button>
+        <button class="mood" data-face="scary" aria-pressed="false"><svg viewBox="0 0 44 40" aria-hidden="true"><ellipse cx="22" cy="22" rx="19" ry="16" fill="#c8571c"/><path d="M22 6q1-4 4-5" stroke="#7a8a34" stroke-width="2.5" fill="none" stroke-linecap="round"/><g fill="#ffd27a"><path d="M9 15l10 5-8 3z"/><path d="M35 15l-10 5 8 3z"/><path d="M9 27l4 3 3-3 3 3 3-3 3 3 3-3 3 3 3-3q-13 11-26 0z"/></g></svg>Spooky</button>
+        <button class="mood" data-face="surprised" aria-pressed="false"><svg viewBox="0 0 44 40" aria-hidden="true"><ellipse cx="22" cy="22" rx="19" ry="16" fill="#c8571c"/><path d="M22 6q1-4 4-5" stroke="#7a8a34" stroke-width="2.5" fill="none" stroke-linecap="round"/><g fill="#ffd27a"><ellipse cx="15" cy="18" rx="3.5" ry="4"/><ellipse cx="29" cy="18" rx="3.5" ry="4"/><ellipse cx="22" cy="29" rx="4" ry="5"/></g></svg>Surprised</button>
+        <button class="mood" data-face="sleepy" aria-pressed="false"><svg viewBox="0 0 44 40" aria-hidden="true"><ellipse cx="22" cy="22" rx="19" ry="16" fill="#c8571c"/><path d="M22 6q1-4 4-5" stroke="#7a8a34" stroke-width="2.5" fill="none" stroke-linecap="round"/><g fill="none" stroke="#ffd27a" stroke-width="2.6" stroke-linecap="round"><path d="M11 18q4 4 8 0"/><path d="M25 18q4 4 8 0"/></g><ellipse cx="22" cy="28" rx="3" ry="2.4" fill="#ffd27a"/></svg>Sleepy</button>
       </div>
     </div>
-  </section>
+
+    <div class="group g-candle switch">
+      <span id="candleLbl">Candle</span>
+      <button role="switch" id="candle" aria-checked="true" aria-labelledby="candleLbl"></button>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="group g-finish">
+      <button class="btn primary" id="finishBtn" disabled>Finish &amp; light it</button>
+    </div>
+    <p class="finish-note" id="finishNote">Carve something first, then light it up.</p>
+  </aside>
 </main>
+
+<div class="modal" id="saveModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Your pumpkin picture">
+    <img id="saveImgEl" alt="Your carved pumpkin">
+    <p>If the download doesn't start, right-click or long-press the picture to save it.</p>
+    <div class="row">
+      <button class="btn" id="closeModal">Close</button>
+      <a class="btn primary" id="downloadLink" download="my-pumpkin.png">Download</a>
+    </div>
+  </div>
+</div>
 <div id="fail" hidden>Your browser can't show 3D graphics here. Try a recent Chrome, Safari or Firefox.</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
@@ -166,9 +322,9 @@
     return new THREE.CanvasTexture(c);
   })();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
-  camera.position.set(0, 0.55, 5.2);
+  camera.position.set(0, 0.85, 4.1);
 
-  scene.add(new THREE.HemisphereLight(0xc8a6e0, 0x3a2418, 0.45));
+  const hemi = new THREE.HemisphereLight(0xc8a6e0, 0x3a2418, 0.45); scene.add(hemi);
   const key = new THREE.DirectionalLight(0xffbf78, 0.85); key.position.set(2.5, 3, 4); scene.add(key);
   const halo = new THREE.PointLight(0xffc34a, 1.4, 4, 2); halo.position.set(0.4, 1.4, -1.6); scene.add(halo); // golden backlight
   const floorGlow = new THREE.PointLight(0xffb040, 0.7, 2.6, 2); floorGlow.position.set(0, -0.1, 1.7); scene.add(floorGlow); // warm pool on the pedestal
@@ -191,41 +347,58 @@
   const colorTex = new THREE.CanvasTexture(colorC), alphaTex = new THREE.CanvasTexture(alphaC), emitTex = new THREE.CanvasTexture(emitC);
   [colorTex, alphaTex, emitTex].forEach(t => t.anisotropy = 4);
 
-  // painterly skin, painted once: thick palette-knife daubs in oranges and golds, with olive, rose and mauve accents
+  // glossy skin, painted once: bright orange, a lighter ridge down each lobe, darker creases and fine mottling
   const [baseC, baseX] = mkCanvas();
   (() => {
     const x = baseX, g = x.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#6a5222'); g.addColorStop(0.12, '#bf5a1c'); g.addColorStop(0.55, '#cc611d'); g.addColorStop(0.9, '#a3401a'); g.addColorStop(1, '#6e2a14');
+    g.addColorStop(0, '#7a5a20'); g.addColorStop(0.07, '#b9561a'); g.addColorStop(0.2, '#e3701f'); g.addColorStop(0.6, '#e06a1c'); g.addColorStop(0.88, '#c2521a'); g.addColorStop(1, '#7c2e12');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
-    for (let k = 0; k < 10; k++) { // each lobe catches light down its middle
-      const cx = (k + 0.5) / 10 * W, gg = x.createLinearGradient(cx - 0.05 * W, 0, cx + 0.05 * W, 0);
-      gg.addColorStop(0, 'rgba(240,130,50,0)'); gg.addColorStop(0.5, 'rgba(240,130,50,.22)'); gg.addColorStop(1, 'rgba(240,130,50,0)');
-      x.fillStyle = gg; x.fillRect(cx - 0.05 * W, H * 0.1, 0.1 * W, H * 0.8);
+    const lw = W / 10;
+    for (let k = 0; k < 10; k++) { // each lobe: lit down its middle, shadowed into the creases
+      const cx = (k + 0.5) * lw, gg = x.createLinearGradient(cx - lw / 2, 0, cx + lw / 2, 0);
+      gg.addColorStop(0, 'rgba(120,36,10,.55)'); gg.addColorStop(0.18, 'rgba(190,70,20,.12)');
+      gg.addColorStop(0.5, 'rgba(255,150,60,.28)'); gg.addColorStop(0.82, 'rgba(190,70,20,.12)'); gg.addColorStop(1, 'rgba(120,36,10,.55)');
+      x.fillStyle = gg; x.fillRect(cx - lw / 2, 0, lw, H);
     }
-    const PAL = [['#d9661e', 26], ['#e57a26', 18], ['#c4501a', 20], ['#a8401a', 12], ['#eb8f36', 6], ['#8a8a40', 6], ['#6f7a3c', 4], ['#9a5a7a', 4], ['#b84a2a', 6]];
-    const total = PAL.reduce((a, p) => a + p[1], 0);
-    const pick = () => { let r = Math.random() * total; for (const [c, w] of PAL) { if ((r -= w) < 0) return c; } return PAL[0][0]; };
-    function daub(px, py, w, h, rot) {
-      x.save(); x.translate(px, py); x.rotate(rot); x.beginPath();
-      for (let i = 0; i < 9; i++) { const t = i / 9 * Math.PI * 2, k = 0.75 + Math.random() * 0.4; x[i ? 'lineTo' : 'moveTo'](Math.cos(t) * w * k, Math.sin(t) * h * k); }
-      x.closePath(); x.fill(); x.restore();
+    const blob = (px, py, r, col, a) => {
+      const gg = x.createRadialGradient(px, py, 0, px, py, r);
+      gg.addColorStop(0, `rgba(${col},${a})`); gg.addColorStop(1, `rgba(${col},0)`);
+      x.fillStyle = gg; x.fillRect(px - r, py - r, r * 2, r * 2);
+    };
+    const MOT = ['245,140,50', '200,82,22', '230,112,36', '170,64,18', '250,165,80'];
+    for (let i = 0; i < 2600; i++) { // soft mottling
+      const py = Math.random() * H, px = Math.random() * W, lat = Math.max(0.3, Math.sin(py / H * Math.PI));
+      blob(px, py, (8 + Math.random() * 34) / lat, MOT[(Math.random() * MOT.length) | 0], 0.06 + Math.random() * 0.12);
     }
-    for (let i = 0; i < 7000; i++) {
-      const py = Math.random() * H, px = Math.random() * W, lat = Math.max(0.25, Math.sin(py / H * Math.PI));
-      const w = (16 + Math.random() * 46) / lat, h = 9 + Math.random() * 22, rot = (Math.random() - 0.5) * 1.6;
-      x.globalAlpha = 0.3 + Math.random() * 0.45; x.fillStyle = pick();
-      daub(px, py, w, h, rot);
-      if (px < w) daub(px + W, py, w, h, rot); else if (px > W - w) daub(px - W, py, w, h, rot);
+    for (let i = 0; i < 2200; i++) { // tiny pale freckles
+      x.fillStyle = `rgba(255,${180 + Math.random() * 40 | 0},110,${0.12 + Math.random() * 0.2})`;
+      x.beginPath(); x.arc(Math.random() * W, Math.random() * H, 0.8 + Math.random() * 1.6, 0, Math.PI * 2); x.fill();
     }
-    x.globalAlpha = 1;
-    for (let k = 0; k <= 10; k++) { // shadowed creases between the lobes (u = k/10)
-      const gx = k / 10 * W, gg = x.createLinearGradient(gx - 36, 0, gx + 36, 0);
-      gg.addColorStop(0, 'rgba(100,32,18,0)'); gg.addColorStop(0.5, 'rgba(100,32,18,.6)'); gg.addColorStop(1, 'rgba(100,32,18,0)');
-      x.fillStyle = gg; x.fillRect(gx - 36, 0, 72, H);
+    for (let k = 0; k <= 10; k++) { // narrow dark seam in each crease
+      const gx = k * lw, gg = x.createLinearGradient(gx - 22, 0, gx + 22, 0);
+      gg.addColorStop(0, 'rgba(90,24,8,0)'); gg.addColorStop(0.5, 'rgba(90,24,8,.55)'); gg.addColorStop(1, 'rgba(90,24,8,0)');
+      x.fillStyle = gg; x.fillRect(gx - 22, 0, 44, H);
     }
-    const top = x.createLinearGradient(0, 0, 0, H * 0.16); // olive around the stem
-    top.addColorStop(0, 'rgba(90,92,40,.9)'); top.addColorStop(1, 'rgba(90,92,40,0)');
-    x.fillStyle = top; x.fillRect(0, 0, W, H * 0.16);
+    const top = x.createLinearGradient(0, 0, 0, H * 0.12); // olive-brown around the stem
+    top.addColorStop(0, 'rgba(96,82,34,.9)'); top.addColorStop(1, 'rgba(96,82,34,0)');
+    x.fillStyle = top; x.fillRect(0, 0, W, H * 0.12);
+  })();
+  // crinkly bumps for the glossy highlights to catch on
+  const bumpTex = (() => {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#808080'; x.fillRect(0, 0, 1024, 512);
+    for (let i = 0; i < 3500; i++) {
+      const v = Math.random() < 0.5 ? 255 : 0, px = Math.random() * 1024, py = Math.random() * 512, r = 2 + Math.random() * 9;
+      const gg = x.createRadialGradient(px, py, 0, px, py, r); gg.addColorStop(0, `rgba(${v},${v},${v},.14)`); gg.addColorStop(1, `rgba(${v},${v},${v},0)`);
+      x.fillStyle = gg; x.fillRect(px - r, py - r, r * 2, r * 2);
+    }
+    x.lineWidth = 1.2; x.strokeStyle = 'rgba(0,0,0,.12)';
+    for (let i = 0; i < 260; i++) { // fine wrinkles
+      let px = Math.random() * 1024, py = Math.random() * 512; x.beginPath(); x.moveTo(px, py);
+      for (let k = 0; k < 5; k++) { px += (Math.random() - 0.5) * 30; py += (Math.random() - 0.5) * 18; x.lineTo(px, py); }
+      x.stroke();
+    }
+    return new THREE.CanvasTexture(c);
   })();
   colorX.drawImage(baseC, 0, 0); // the skin never changes; cuts only touch the alpha and glow maps
   function paintBase() {
@@ -310,6 +483,11 @@
       carveShape(polyPath(it.pts));
       let a = 0; it.pts.forEach(([x, y], i) => { const [x2, y2] = it.pts[(i + 1) % it.pts.length]; a += x * y2 - x2 * y; });
       carvedArea += Math.abs(a) / 2;
+    } else if (it.t === 'cut') { // a closed loop: the enclosed piece comes out, edged by the knife line
+      carveShape(polyPath(it.pts), 8);
+      let a = 0; it.pts.forEach(([x, y], i) => { const [x2, y2] = it.pts[(i + 1) % it.pts.length]; a += x * y2 - x2 * y; });
+      carvedArea += Math.abs(a) / 2;
+      it.dabs.forEach(([x, y, r]) => stamp(x, y, r));
     } else it.pts.forEach(([x, y, r]) => stamp(x, y, r || it.r));
   }
   function redraw() { carvedArea = 0; paintBase(); items.forEach(applyItem); texDirty = true; }
@@ -320,24 +498,22 @@
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i);
       const a = Math.atan2(v.z, v.x);
-      const depth = 0.18 * (1 + 0.3 * Math.sin(2 * a + 0.4)); // some creases deeper than others
-      const rib = 1 - depth + depth * Math.pow(Math.abs(Math.sin(5 * a)), 0.45); // fat lobes, sharp deep creases
-      const wob = 1 + 0.07 * Math.sin(a + 0.7) + 0.035 * Math.sin(2 * a + 2.1) + 0.025 * Math.sin(3 * a + 1.3); // lopsided: one side fuller
-      const bulge = 1 + 0.07 * (1 - v.y * v.y) - 0.03 * v.y; // squat, fuller below the middle
-      v.x *= rib * wob * bulge * 1.1; v.z *= rib * wob * bulge * 1.1; v.y *= 0.92 * (1 + 0.06 * Math.sin(a - 0.5)); // taller on one side
-      v.x += 0.05 * v.y; // slight lean
+      const rib = 0.86 + 0.14 * Math.pow(Math.abs(Math.sin(5 * a)), 0.38); // fat rounded lobes, deep narrow creases
+      const wob = 1 + 0.04 * Math.sin(a + 0.7) + 0.02 * Math.sin(2 * a + 2.1); // one side a touch fuller
+      const bulge = 1 + 0.1 * (1 - v.y * v.y) - 0.04 * v.y; // wide and squat, fullest just below the middle
+      v.x *= rib * wob * bulge * 1.16; v.z *= rib * wob * bulge * 1.16; v.y *= 0.88 * (1 + 0.04 * Math.sin(a - 0.5));
       const rxz = Math.hypot(v.x, v.z);
-      v.y -= v.y > 0 ? 0.3 * Math.exp(-rxz * rxz / 0.16) : -0.16 * Math.exp(-rxz * rxz / 0.1); // deep stem well, flat-ish base
+      v.y -= v.y > 0 ? 0.26 * Math.exp(-rxz * rxz / 0.18) : -0.14 * Math.exp(-rxz * rxz / 0.12); // sunken stem well, flat-ish base
       v.multiplyScalar(scale);
       p.setXYZ(i, v.x, v.y, v.z);
     }
     geo.computeVertexNormals();
     return geo;
   }
-  const pumpkin = new THREE.Group(); pumpkin.position.y = GROUND + 0.74; scene.add(pumpkin);
+  const pumpkin = new THREE.Group(); pumpkin.position.y = GROUND + 0.72; scene.add(pumpkin);
   const shellMat = new THREE.MeshStandardMaterial({
     map: colorTex, alphaMap: alphaTex, alphaTest: 0.5, emissiveMap: emitTex, emissive: 0xffffff, emissiveIntensity: 1,
-    roughness: 0.55, metalness: 0,
+    bumpMap: bumpTex, bumpScale: 0.012, roughness: 0.42, metalness: 0,
   });
   const shell = new THREE.Mesh(pumpkinGeometry(1), shellMat); pumpkin.add(shell);
   // personality guide: dashed lines painted on a transparent skin just above the pumpkin
@@ -371,40 +547,34 @@
     geo.computeVertexNormals(); return geo;
   }
   const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
-  const barkTex = (() => {
-    const c = document.createElement('canvas'); c.width = 512; c.height = 128; const x = c.getContext('2d');
-    x.fillStyle = '#5a4a22'; x.fillRect(0, 0, 512, 128);
-    const cols = ['#6f7d38', '#8a9a48', '#4a3518', '#7a5a2a', '#c0a060', '#2e2410', '#5f6e30'];
-    for (let i = 0; i < 340; i++) {
-      x.strokeStyle = cols[(Math.random() * cols.length) | 0]; x.globalAlpha = 0.45 + Math.random() * 0.45; x.lineWidth = 2 + Math.random() * 10; x.lineCap = 'round';
-      const sx = Math.random() * 600 - 60, len = 40 + Math.random() * 120; x.beginPath(); x.moveTo(sx, Math.random() * 128); x.lineTo(sx + len, Math.random() * 128 * 0.3 + 40); x.stroke();
+  const barkTex = (() => { // twisted brown fibres, greener where the stem meets the pumpkin
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const x = c.getContext('2d');
+    x.fillStyle = '#6a4724'; x.fillRect(0, 0, 1024, 128);
+    const cols = ['#8a6232', '#a37a40', '#4a3018', '#c49a5a', '#5a3a1a', '#7a5428'];
+    for (let i = 0; i < 1400; i++) {
+      x.strokeStyle = cols[(Math.random() * cols.length) | 0]; x.globalAlpha = 0.3 + Math.random() * 0.45; x.lineWidth = 0.8 + Math.random() * 3.5; x.lineCap = 'round';
+      const sx = Math.random() * 1200 - 160, sy = Math.random() * 128, len = 160 + Math.random() * 360;
+      x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + len / 2, sy + (Math.random() - 0.5) * 8, sx + len, sy + (Math.random() - 0.5) * 10); x.stroke();
     }
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 1); return t;
+    const base = x.createLinearGradient(0, 0, 200, 0); base.addColorStop(0, 'rgba(110,130,50,.75)'); base.addColorStop(1, 'rgba(110,130,50,0)');
+    x.globalAlpha = 1; x.fillStyle = base; x.fillRect(0, 0, 200, 128);
+    return new THREE.CanvasTexture(c);
   })();
-  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.8 });
-  pumpkin.add(new THREE.Mesh(taperedTube([V(0, 0.52), V(0.03, 0.82), V(-0.02, 1.05), V(-0.14, 1.25), V(-0.34, 1.34), V(-0.52, 1.25), V(-0.56, 1.07),
-    V(-0.45, 0.95), V(-0.32, 0.99), V(-0.3, 1.11), V(-0.38, 1.16), V(-0.44, 1.1)], 0.17, 0.016, 0.08), barkMat));
+  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.7 });
+  const vineMat = new THREE.MeshStandardMaterial({ color: 0x86a038, roughness: 0.55 });
+  // thick stem rising from the well, arching left into a big spiral hook
+  pumpkin.add(new THREE.Mesh(taperedTube([V(0, 0.48), V(0.06, 0.72), V(0.06, 0.92), V(-0.02, 1.1), V(-0.16, 1.24), V(-0.34, 1.29), V(-0.5, 1.22),
+    V(-0.57, 1.06), V(-0.52, 0.93), V(-0.41, 0.89), V(-0.32, 0.95), V(-0.32, 1.04), V(-0.39, 1.08), V(-0.44, 1.03)], 0.19, 0.024, 0.1, 160), barkMat));
   function curl(start, end, turns, r, dir = 1) {
-    const pts = [start, start.clone().lerp(end, 0.5).add(V(0, 0.05))];
+    const pts = [start, start.clone().lerp(end, 0.5).add(V(0, 0.06))];
     for (let i = 0; i <= 30; i++) { const t = i / 30, a = t * turns * Math.PI * 2, rr = r * (1 - t * 0.75); pts.push(V(end.x + dir * (Math.cos(a) * rr - r), end.y + Math.sin(a) * rr, end.z)); }
     return pts;
   }
-  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(0.1, 0.68, 0.06), V(0.42, 1.05, 0.1), 1.4, 0.075), 0.026, 0.008), barkMat));
-  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(-0.08, 0.66, -0.1), V(-0.24, 0.95, -0.36), 1.1, 0.055, -1), 0.02, 0.006), barkMat));
+  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(0.14, 0.55, 0.04), V(0.5, 1.02, 0.08), 1.6, 0.07), 0.022, 0.007), vineMat));
+  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(-0.12, 0.54, 0.08), V(-0.5, 0.7, 0.3), 1.2, 0.045, -1), 0.016, 0.005), vineMat));
 
-  // leaves: lobed blades draped over the pumpkin's shoulder (each vertex sits just above the surface)
-  const leafTex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#6f8236'); g.addColorStop(1, '#a3b04c');
-    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 220; i++) { x.fillStyle = ['#a0ac4c', '#4e5e26', '#7a8a38', '#b8b058'][i % 4]; x.globalAlpha = 0.25 + Math.random() * 0.3;
-      x.beginPath(); x.ellipse(Math.random() * 256, Math.random() * 256, 6 + Math.random() * 14, 4 + Math.random() * 8, Math.random() * 3, 0, Math.PI * 2); x.fill(); }
-    x.globalAlpha = 0.8; x.strokeStyle = '#c9c47a'; x.lineWidth = 3;
-    x.beginPath(); x.moveTo(128, 0); x.lineTo(128, 256); x.stroke(); x.lineWidth = 1.6;
-    for (let v = 30; v < 240; v += 38) { x.beginPath(); x.moveTo(128, v); x.lineTo(30, v + 40); x.moveTo(128, v); x.lineTo(226, v + 40); x.stroke(); }
-    return new THREE.CanvasTexture(c);
-  })();
-  const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, roughness: 0.75, side: THREE.DoubleSide });
+  // sepals: pointed green-brown flaps draped from the stem base (each vertex sits just above the surface)
+  const sepalMat = new THREE.MeshStandardMaterial({ map: barkTex, color: 0xb8c070, roughness: 0.7, side: THREE.DoubleSide });
   pumpkin.updateMatrixWorld(true);
   const down = new THREE.Raycaster(), from = new THREE.Vector3(), DOWN = V(0, -1, 0);
   function surfaceY(lx, lz) { // pumpkin-local height of the skin at (lx, lz)
@@ -412,30 +582,30 @@
     down.set(from, DOWN); const h = down.intersectObject(hitProxy)[0];
     return h ? pumpkin.worldToLocal(h.point.clone()).y : 0.5;
   }
-  for (let k = 0; k < 5; k++) {
-    const phi = k * Math.PI * 2 / 5 + Math.random() * 0.5, L = 0.6 + Math.random() * 0.2;
+  for (let k = 0; k < 6; k++) {
+    const phi = k * Math.PI * 2 / 6 + Math.random() * 0.4, L = 0.26 + Math.random() * 0.1;
     const dir = V(Math.cos(phi), 0, Math.sin(phi)), side = V(-dir.z, 0, dir.x);
-    const g = new THREE.PlaneGeometry(1, 1, 10, 16), p = g.attributes.position;
+    const g = new THREE.PlaneGeometry(1, 1, 4, 10), p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const u = p.getX(i), t = p.getY(i) + 0.5;
-      const w = 0.42 * L * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.05)), 0.7) * (0.82 + 0.18 * Math.abs(Math.cos(t * Math.PI * 3)));
-      const pos = dir.clone().multiplyScalar(0.06 + t * L).addScaledVector(side, u * w);
-      const y = surfaceY(pos.x, pos.z) + 0.018 + 0.05 * Math.sin(Math.PI * t) + Math.abs(u) * w * 0.35;
+      const w = 0.42 * L * Math.pow(1 - t, 0.9) * Math.min(1, 0.6 + t * 3);
+      const pos = dir.clone().multiplyScalar(0.12 + t * L).addScaledVector(side, u * w);
+      const y = surfaceY(pos.x, pos.z) + 0.012 + 0.06 * (1 - t) * (1 - t) + Math.abs(u) * w * 0.3;
       p.setXYZ(i, pos.x, y, pos.z);
     }
     g.computeVertexNormals();
-    pumpkin.add(new THREE.Mesh(g, leafMat));
+    pumpkin.add(new THREE.Mesh(g, sepalMat));
   }
 
   // candle + flame inside
   const candleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.22, 20), new THREE.MeshStandardMaterial({ color: 0xf3e6c8, emissive: 0x553311, roughness: 0.6 }));
-  candleMesh.position.y = -0.5; pumpkin.add(candleMesh);
+  candleMesh.position.y = -0.4; pumpkin.add(candleMesh);
   const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
     const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, '#fff'); g.addColorStop(0.35, 'rgba(255,255,255,.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
     x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: 0xff9a30, opacity: 0.75, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  flame.position.y = -0.3; flame.scale.set(0.16, 0.3, 1); pumpkin.add(flame);
-  const innerLight = new THREE.PointLight(0xffa040, 2.2, 1.6, 2); innerLight.position.y = -0.2; pumpkin.add(innerLight);
+  flame.position.y = -0.22; flame.scale.set(0.16, 0.3, 1); pumpkin.add(flame);
+  const innerLight = new THREE.PointLight(0xffa040, 2.2, 1.6, 2); innerLight.position.y = -0.12; pumpkin.add(innerLight);
   const spill = new THREE.PointLight(0xff9a30, 0, 7, 2); spill.position.set(0, 0.1, 0.4); pumpkin.add(spill);
 
   // ---------- particles ----------
@@ -523,8 +693,9 @@
   }
 
   // ---------- controls + carving input ----------
+  const $ = id => document.getElementById(id);
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  let mode = 'spin', brush = 10, stroke = null, last = null;
+  let tool = 'carve', finished = false, brush = 10, stroke = null, last = null;
   function hitAt(e) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -537,11 +708,11 @@
     let d = 0;
     if (last && Math.abs(x - last[0]) < W / 4) {
       d = Math.hypot(x - last[0], y - last[1]);
-      const speed = d / Math.max(8, t - stroke.t);
+      const speed = d / Math.max(8, t - stroke.time);
       const target = Math.min(1.4, Math.max(0.35, 1.4 - speed * 0.25));
       stroke.w += (target - stroke.w) * 0.3;
-    }
-    stroke.len += d; stroke.t = t;
+    } else if (last) stroke.seam = true; // crossed the back seam: never treated as a closed loop
+    stroke.len += d; stroke.time = t;
     const ramp = Math.min(1, 0.15 + stroke.len / 160);
     const r = Math.max(1.5, brush * ramp * stroke.w * (0.85 + 0.25 * Math.sin(stroke.len / 45)));
     const pts = [];
@@ -552,16 +723,19 @@
     pts.forEach(([a, b, rr]) => stamp(a, b, rr));
     stroke.pts.push(...pts); last = [x, y, r]; texDirty = true;
     const nrm = hit.face.normal.clone().transformDirection(hitProxy.matrixWorld);
+    stroke.center.add(hit.point); stroke.normal.add(nrm); stroke.hits++;
     burst(hit.point, nrm, Math.min(3, pts.length));
   }
   // registered before OrbitControls so it can claim the drag first
   renderer.domElement.addEventListener('pointerdown', e => {
-    if (mode !== 'carve') return;
+    if (tool !== 'carve' || finished || e.button > 0) return;
     const hit = hitAt(e);
     if (!hit) return;
     controls.enabled = false;
     renderer.domElement.setPointerCapture(e.pointerId);
-    stroke = { t: 'dabs', r: brush, pts: [], w: 1, len: 0, t: e.timeStamp }; items.push(stroke); last = null;
+    commit();
+    stroke = { t: 'dabs', r: brush, pts: [], w: 1, len: 0, time: e.timeStamp, center: new THREE.Vector3(), normal: new THREE.Vector3(), hits: 0 };
+    items.push(stroke); last = null;
     carveAt(hit, e.timeStamp);
   });
   let pending = null; // pointer moves are folded into one carve per frame
@@ -572,24 +746,67 @@
     const hit = hitAt(e);
     if (hit) carveAt(hit, e.timeStamp); else last = null;
   }
+  // a stroke that ends near where it began encloses a piece: find the loop and cut it out
+  function closedLoop(s) {
+    const p = s.pts;
+    if (s.seam || p.length < 20) return null;
+    const end = p[p.length - 1], reach = Math.max(34, s.r * 3.2);
+    if (s.len < reach * 5) return null;
+    let best = -1, bd = reach;
+    for (let i = 0; i < p.length * 0.3; i++) { const d = Math.hypot(p[i][0] - end[0], p[i][1] - end[1]); if (d < bd) { bd = d; best = i; } }
+    if (best < 0) return null;
+    const poly = p.slice(best).filter((_, i) => i % 3 === 0).map(([x, y]) => [x, y]);
+    let a = 0; poly.forEach(([x, y], i) => { const [x2, y2] = poly[(i + 1) % poly.length]; a += x * y2 - x2 * y; });
+    return Math.abs(a) / 2 > 1800 ? poly : null;
+  }
+  let cutFlash = 0;
   const endStroke = () => {
     flushCarve();
-    if (stroke && !stroke.pts.length) items.pop();
-    else if (stroke) { // taper the tail like a lifted brush
-      const p = stroke.pts, n = Math.min(14, p.length - 1);
-      for (let i = 0; i < n; i++) { const q = p[p.length - 1 - i]; q[2] = Math.max(1.5, q[2] * (0.2 + 0.8 * i / n)); }
-      redraw();
+    const s = stroke; stroke = null; controls.enabled = true;
+    if (!s) return;
+    if (!s.pts.length) { items.pop(); history.pop(); return; }
+    const p = s.pts, n = Math.min(14, p.length - 1); // taper the tail like a lifted brush
+    for (let i = 0; i < n; i++) { const q = p[p.length - 1 - i]; q[2] = Math.max(1.5, q[2] * (0.2 + 0.8 * i / n)); }
+    const loop = closedLoop(s), item = loop ? { t: 'cut', pts: loop, dabs: p, r: s.r } : { t: 'dabs', r: s.r, pts: p };
+    items[items.length - 1] = item;
+    redraw();
+    if (loop) {
+      const c = s.center.divideScalar(s.hits), nrm = s.normal.normalize();
+      burst(c, nrm, 24); cutFlash = 1;
+      toast('Piece cut out', true);
+      dismissCoach();
     }
-    stroke = null; controls.enabled = true;
+    refreshButtons();
   };
   renderer.domElement.addEventListener('pointerup', endStroke);
   renderer.domElement.addEventListener('pointercancel', endStroke);
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.target.set(0, GROUND + 0.85, 0);
-  controls.enablePan = false; controls.enableDamping = true;
-  controls.minDistance = 3; controls.maxDistance = 8; controls.enableZoom = false; controls.maxPolarAngle = Math.PI / 2 - 0.08;
+  controls.enablePan = false; controls.enableDamping = true; controls.enableRotate = false;
+  controls.minDistance = 2.8; controls.maxDistance = 7; controls.enableZoom = true; controls.maxPolarAngle = Math.PI / 2 - 0.08;
   controls.update();
+
+  // camera moves: zoom buttons and the front view glide instead of jumping
+  const FRONT = V(0, 0.2, 0.98).normalize();
+  let flight = null;
+  function flyTo(dir, dist, ms = 650) {
+    flight = { a: camera.position.clone().sub(controls.target), b: dir.clone().normalize().multiplyScalar(dist), t0: performance.now(), ms };
+  }
+  function stepFlight(now) {
+    if (!flight) return;
+    const k = Math.min(1, (now - flight.t0) / flight.ms), e = k * k * (3 - 2 * k);
+    const da = flight.a.length(), db = flight.b.length();
+    const v = flight.a.clone().normalize().lerp(flight.b.clone().normalize(), e).normalize().multiplyScalar(da + (db - da) * e);
+    camera.position.copy(controls.target).add(v);
+    if (k === 1) flight = null;
+  }
+  const camDist = () => camera.position.distanceTo(controls.target);
+  const camDir = () => camera.position.clone().sub(controls.target);
+  const zoom = f => flyTo(camDir(), Math.min(controls.maxDistance, Math.max(controls.minDistance, camDist() * f)), 260);
+  $('zoomIn').onclick = () => zoom(0.82);
+  $('zoomOut').onclick = () => zoom(1.22);
+  $('frontView').onclick = () => flyTo(FRONT, camDist());
 
   // ---------- post: bloom ----------
   const composer = new THREE.EffectComposer(renderer);
@@ -599,17 +816,77 @@
 
   function resize() {
     const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
     renderer.setSize(w, h, false); composer.setSize(w, h);
     camera.aspect = w / h;
-    camera.fov = w < h * 1.1 ? 52 : 36; // narrow stages: pull back so the pumpkin fits
+    camera.fov = w < h * 1.1 ? 50 : 34; // narrow stages: wider lens so the pumpkin fits
     camera.updateProjectionMatrix();
   }
   addEventListener('resize', resize); resize();
+  // distance at which the whole pumpkin fits the stage, times a margin
+  const fitDist = m => { const vt = Math.tan(camera.fov * Math.PI / 360), ht = vt * camera.aspect;
+    return Math.min(controls.maxDistance, Math.max(controls.minDistance, (Math.max(1.35 / vt, 1.65 / ht) + 0.5) * m)); }; // + the pumpkin's near half
+  camera.position.copy(controls.target).addScaledVector(FRONT, fitDist(1.08));
   if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
 
-  // ---------- buttons ----------
-  const $ = id => document.getElementById(id);
-  const NAMES = { blank: 'blank', happy: 'happy', scary: 'spooky', surprised: 'surprised', sleepy: 'sleepy' };
+  // ---------- tools ----------
+  const HINTS = {
+    carve: 'Draw on the pumpkin to carve. Close a loop to cut a piece out.',
+    rotate: 'Drag to turn the pumpkin. Scroll or use the zoom buttons to look closer.',
+  };
+  function setTool(t) {
+    tool = t;
+    stage.classList.toggle('carve', t === 'carve'); stage.classList.toggle('rotate', t === 'rotate');
+    $('toolCarve').setAttribute('aria-pressed', t === 'carve');
+    $('toolRotate').setAttribute('aria-pressed', t === 'rotate');
+    controls.enableRotate = t === 'rotate';
+    if (!finished) $('hint').textContent = HINTS[t];
+  }
+  $('toolCarve').onclick = () => setTool('carve');
+  $('toolRotate').onclick = () => setTool('rotate');
+
+  // ---------- history: every change is a snapshot, so undo, redo and start over all reverse ----------
+  const history = [], future = [];
+  function commit() { history.push(items.slice()); future.length = 0; }
+  function undo() { if (!history.length || stroke) return; future.push(items); items = history.pop(); redraw(); refreshButtons(); }
+  function redo() { if (!future.length || stroke) return; history.push(items); items = future.pop(); redraw(); refreshButtons(); }
+  function refreshButtons() {
+    $('undo').disabled = !history.length;
+    $('redo').disabled = !future.length;
+    $('newPumpkin').disabled = !items.length;
+    $('finishBtn').disabled = !items.length;
+    $('finishNote').hidden = !!items.length;
+  }
+  $('undo').onclick = undo; $('redo').onclick = redo;
+  $('newPumpkin').onclick = () => { if (!items.length) return; commit(); items = []; redraw(); refreshButtons(); toast('Pumpkin cleared', true); };
+
+  let toastTimer = 0;
+  function toast(text, undoable) {
+    $('toastText').textContent = text; $('toastUndo').hidden = !undoable; $('toast').hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('toast').hidden = true; }, 6000);
+  }
+  $('toastUndo').onclick = () => { undo(); $('toast').hidden = true; };
+
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, textarea')) { if (e.key.length === 1) return; }
+    const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
+    if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (mod && k === 'y') { e.preventDefault(); redo(); }
+    else if (mod || finished) return;
+    else if (k === 'c') setTool('carve');
+    else if (k === 'r') setTool('rotate');
+    else if (k === 'f') $('frontView').click();
+    else if (k === 'escape' && !$('saveModal').hidden) $('saveModal').hidden = true;
+  });
+
+  // ---------- coach ----------
+  let coachSeen = false;
+  try { coachSeen = localStorage.getItem('pp-coach') === '1'; } catch (e) {}
+  $('coach').hidden = coachSeen; $('hint').hidden = !coachSeen;
+  function dismissCoach() { $('coach').hidden = true; $('hint').hidden = false; try { localStorage.setItem('pp-coach', '1'); } catch (e) {} }
+  $('coachOk').onclick = dismissCoach;
+
+  // ---------- face guides ----------
   let face = 'blank';
   function drawGuide() {
     guideX.clearRect(0, 0, W, H);
@@ -623,38 +900,64 @@
     }
     guideX.restore(); guideTex.needsUpdate = true;
   }
-  const say = t => { $('status').textContent = t; };
-  function setMode(m) {
-    mode = m;
-    const carving = m === 'carve';
-    $('carveBtn').setAttribute('aria-pressed', carving);
-    $('carveBtn').textContent = carving ? 'Done carving' : 'Carve pumpkin';
-    stage.classList.toggle('carving', carving);
-    $('hint').textContent = carving ? (face === 'blank' ? 'Drag on the pumpkin to carve. Drag beside it to turn it.' : 'Trace the guide to carve. Drag beside the pumpkin to turn it.') : 'Drag to turn your pumpkin';
-    const free = face === 'blank';
-    say(carving ? (free ? 'Carve any face or pattern you like.' : `Carve along the lines to give it a ${NAMES[face]} face.`)
-      : items.length ? 'Your pumpkin is glowing. Spin it to admire.'
-      : free ? 'Your blank pumpkin is ready for your own design.' : `Your ${NAMES[face]} pumpkin is ready to carve.`);
-    if (carving) { // turn the face toward the carver
-      const d = camera.position.distanceTo(controls.target);
-      camera.position.set(0, controls.target.y + d * 0.18, d * 0.98);
-    }
-  }
-  $('carveBtn').onclick = () => setMode(mode === 'carve' ? 'spin' : 'carve');
-  document.querySelectorAll('[data-face]').forEach(b => b.onclick = () => {
-    document.querySelectorAll('[data-face]').forEach(o => o.setAttribute('aria-pressed', o === b));
-    face = b.dataset.face; drawGuide(); setMode(mode);
+  document.querySelectorAll('.mood').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.mood').forEach(o => o.setAttribute('aria-pressed', o === b));
+    face = b.dataset.face; drawGuide();
+    if (face !== 'blank') { flyTo(FRONT, camDist()); setTool('carve'); }
   });
+
   const size = $('knifeSize');
   const setSize = () => { brush = +size.value; $('sizeOut').textContent = size.value + ' px'; size.style.setProperty('--fill', ((size.value - size.min) / (size.max - size.min) * 100) + '%'); };
   size.oninput = setSize; setSize();
-  const undo = () => { items.pop(); redraw(); };
-  $('undo').onclick = undo;
-  addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); undo(); } });
-  $('newPumpkin').onclick = () => { items = []; redraw(); setMode(mode); };
+
   let candle = true;
-  $('candle').onclick = () => { candle = !candle; $('candle').setAttribute('aria-pressed', candle); $('candle').textContent = candle ? 'Candle on' : 'Candle off'; };
-  drawGuide();
+  $('candle').onclick = () => { candle = !candle; $('candle').setAttribute('aria-checked', candle); };
+
+  // ---------- finish: hide the tools, dim the room, let the candle catch ----------
+  const ROOM = [hemi, key, halo, floorGlow, warm, rimL, rimR].map(l => [l, l.intensity]);
+  let room = 1, roomTarget = 1, lit = 1, litFrom = 0, toolBefore = 'carve';
+  function finish() {
+    if (!items.length) return;
+    finished = true; toolBefore = tool;
+    $('app').classList.add('finished');
+    guide.visible = false; $('coach').hidden = true; $('toast').hidden = true;
+    setTool('rotate'); $('hint').textContent = '';
+    candle = true; $('candle').setAttribute('aria-checked', true);
+    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(FRONT, fitDist(0.95), 1200))); // after the panel folds away
+    roomTarget = 0.5; litFrom = performance.now() + 250;
+    setTimeout(() => { if (finished) $('finale').hidden = false; }, 1500);
+  }
+  function keepCarving() {
+    finished = false; $('finale').hidden = true;
+    $('app').classList.remove('finished');
+    guide.visible = true; roomTarget = 1; litFrom = 0;
+    setTool(toolBefore);
+  }
+  $('finishBtn').onclick = finish;
+  $('keepCarving').onclick = keepCarving;
+
+  // ---------- save image ----------
+  let captureReq = false;
+  $('saveImg').onclick = () => { captureReq = true; };
+  function capture() {
+    const src = renderer.domElement, w = src.width, h = src.height;
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+    x.drawImage(src, 0, 0);
+    const g = x.createLinearGradient(0, h * 0.78, 0, h);
+    g.addColorStop(0, 'rgba(20,12,29,0)'); g.addColorStop(1, 'rgba(20,12,29,.85)');
+    x.fillStyle = g; x.fillRect(0, h * 0.78, w, h * 0.22);
+    const fs = Math.max(16, Math.round(Math.min(h * 0.045, w * 0.06)));
+    x.fillStyle = '#f6eadb'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+    x.font = `500 ${fs}px "Cormorant Garamond", Georgia, serif`;
+    x.fillText('Carved at Pumpkin Parlor', w / 2, h - fs * 0.9);
+    const url = c.toDataURL('image/png');
+    $('saveImgEl').src = url; $('downloadLink').href = url;
+    $('saveModal').hidden = false;
+  }
+  $('closeModal').onclick = () => { $('saveModal').hidden = true; };
+  $('saveModal').onclick = e => { if (e.target === $('saveModal')) $('saveModal').hidden = true; };
+
+  drawGuide(); setTool('carve'); refreshButtons();
 
   // ---------- loop ----------
   redraw(); // start with an uncarved pumpkin
@@ -663,19 +966,25 @@
     const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
     flushCarve();
     if (texDirty) { alphaTex.needsUpdate = emitTex.needsUpdate = true; texDirty = false; }
+    room += (roomTarget - room) * Math.min(1, dt * 2.5);
+    for (const [l, b] of ROOM) l.intensity = b * room;
+    if (litFrom) { const k = Math.max(0, Math.min(1, (now - litFrom) / 2200)); lit = k * k * (3 - 2 * k); } else lit = 1;
+    cutFlash = Math.max(0, cutFlash - dt * 2.2);
     const flick = 0.85 + 0.09 * Math.sin(now / 90) + 0.05 * Math.sin(now / 37 + 1) + 0.04 * Math.sin(now / 13);
     const open = Math.min(1, carvedArea / 120000);
-    const on = candle ? 1 : 0;
-    innerLight.intensity = 1.2 * flick * on;
-    spill.intensity = 1.4 * open * flick * on;
-    shellMat.emissiveIntensity = 0.6 * flick * on;
+    const on = (candle ? 1 : 0) * lit, glow = finished ? 1.25 : 1;
+    innerLight.intensity = 1.2 * flick * on * glow;
+    spill.intensity = (1.4 * open * glow + 1.6 * cutFlash) * flick * on;
+    shellMat.emissiveIntensity = (0.6 * glow + 0.5 * cutFlash) * flick * on;
     innerMat.emissive.setRGB(0.16 * flick * on, 0.05 * flick * on, 0.005 * on);
-    for (const m of wallMats) m.emissiveIntensity = 0.28 * m.userData.depth * flick * on; // inner flesh catches the candle
-    flame.visible = candle;
-    flame.scale.set(0.1 * flick, 0.2 * (0.9 + 0.2 * Math.sin(now / 60)), 1);
+    for (const m of wallMats) m.emissiveIntensity = 0.28 * m.userData.depth * flick * on * glow; // inner flesh catches the candle
+    flame.visible = candle && lit > 0.02;
+    flame.scale.set(0.1 * flick * lit, 0.2 * (0.9 + 0.2 * Math.sin(now / 60)) * lit, 1);
     stepParticles(dt); stepMagic(dt, now);
+    stepFlight(now);
     controls.update();
     composer.render();
+    if (captureReq) { captureReq = false; capture(); }
   });
 })();
 </script>
