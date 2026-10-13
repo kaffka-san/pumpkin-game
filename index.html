@@ -436,23 +436,91 @@
   const rimR = new THREE.DirectionalLight(0xb59bff, 0.4); rimR.position.set(4, 1.5, -3); scene.add(rimR);
 
   const GROUND = -0.7;
-  // the pumpkin sits on an old tree stump in a little night garden
-  const stumpTop = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
-    x.fillStyle = '#3e2c20'; x.fillRect(0, 0, 512, 512);
-    for (let r = 250; r > 4; r -= 7 + Math.random() * 9) { x.strokeStyle = `rgba(${Math.random() < .5 ? '28,18,12' : '92,70,48'},${0.35 + Math.random() * 0.3})`; x.lineWidth = 1.5 + Math.random() * 2;
-      x.beginPath(); x.ellipse(256 + (Math.random() - .5) * 6, 256 + (Math.random() - .5) * 6, r, r * 0.97, 0, 0, Math.PI * 2); x.stroke(); }
-    x.strokeStyle = 'rgba(30,18,10,.6)'; x.lineWidth = 3; x.beginPath(); x.moveTo(256, 250); x.lineTo(420, 140); x.stroke();
-    return new THREE.CanvasTexture(c); })();
-  const stumpBark = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const x = c.getContext('2d');
-    x.fillStyle = '#35241c'; x.fillRect(0, 0, 1024, 128);
-    for (let i = 0; i < 500; i++) { x.strokeStyle = ['#2a1a12', '#4a3426', '#3e3a26', '#5a4232'][i % 4]; x.lineWidth = 2 + Math.random() * 6; x.globalAlpha = 0.6;
-      const px = Math.random() * 1024; x.beginPath(); x.moveTo(px, 0); x.lineTo(px + (Math.random() - .5) * 20, 128); x.stroke(); }
-    x.globalAlpha = 0.3; x.fillStyle = '#2c3a22'; // moss at the foot
-    for (let i = 0; i < 400; i++) { x.beginPath(); x.arc(Math.random() * 1024, 128 - Math.random() * Math.random() * 50, 1 + Math.random() * 3, 0, 7); x.fill(); }
-    return new THREE.CanvasTexture(c); })();
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.5, 0.55, 64, 1),
-    [new THREE.MeshStandardMaterial({ map: stumpBark, roughness: 0.95 }), new THREE.MeshStandardMaterial({ map: stumpTop, roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: 0x1a120c })]);
-  pedestal.position.y = GROUND - 0.275; scene.add(pedestal);
+  // the pumpkin sits on an old sawn tree stump in a little night garden:
+  // lumpy bark sides with root flares, a rounded bevel where the bark meets the cut, and a sawn face with growth rings
+  const ST = { top: GROUND, bot: GROUND - 0.62, R: 1.3, bev: 0.07, A: 180, HS: 36 };
+  const rootAt = [0.4, 1.55, 2.6, 3.9, 5.1], rootAmp = [0.42, 0.3, 0.5, 0.36, 0.46];
+  const lumpR = a => ST.R * (1 + 0.025 * Math.sin(3 * a + 1.2) + 0.018 * Math.sin(5 * a + 0.4) + 0.01 * Math.sin(11 * a + 2.0)); // never quite round
+  function sideR(a, t) { // t: 0 at the foot, 1 at the top of the bark
+    let r = lumpR(a) + 0.13 * Math.pow(1 - t, 2);
+    rootAt.forEach((ra, i) => { let d = Math.atan2(Math.sin(a - ra), Math.cos(a - ra)); r += rootAmp[i] * Math.exp(-(d / 0.2) * (d / 0.2)) * Math.pow(1 - t, 2.6); });
+    return r + 0.012 * Math.sin(a * 46 + Math.sin(a * 7) * 3) * (0.4 + 0.6 * t); // shallow bark furrows
+  }
+  const stumpCap = (() => { const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'), C = N / 2;
+    // cap texture is polar: radius 0..0.86 = sawn wood, 0.86..0.9 = pale sapwood + dark cambium, 0.9..1 = the bark bevel
+    x.fillStyle = '#2a1c14'; x.fillRect(0, 0, N, N);
+    const ringPath = (rr, wob, ph) => { x.beginPath(); for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2;
+      const k = rr * (1 + wob * (Math.sin(3 * a + ph) * 0.6 + Math.sin(7 * a + ph * 2) * 0.4)); const px = C + 14 * (1 - rr / C) + Math.cos(a) * k, py = C - 9 * (1 - rr / C) + Math.sin(a) * k;
+      i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); };
+    const wood = x.createRadialGradient(C + 14, C - 9, 0, C, C, C * 0.88); wood.addColorStop(0, '#6e4a2c'); wood.addColorStop(0.6, '#8a6038'); wood.addColorStop(1, '#a37a4a');
+    ringPath(C * 0.9, 0.01, 0); x.fillStyle = '#cfa774'; x.fill(); // sapwood
+    ringPath(C * 0.86, 0.012, 0.5); x.fillStyle = wood; x.fill();
+    for (let rr = C * 0.84, i = 0; rr > 6; rr -= 5 + Math.random() * 9 * (rr / C + 0.3), i++) { // growth rings: thin dark latewood lines
+      ringPath(rr, 0.006 + 0.012 * Math.random(), i * 0.37); x.strokeStyle = `rgba(52,30,16,${0.3 + Math.random() * 0.35})`; x.lineWidth = 1 + Math.random() * 2.2; x.stroke(); }
+    x.save(); ringPath(C * 0.86, 0.012, 0.5); x.clip();
+    for (let i = 0; i < 140; i++) { const a = Math.random() * 7, r0 = Math.random() * C * 0.3, r1 = r0 + 40 + Math.random() * C * 0.5; // medullary rays
+      x.strokeStyle = 'rgba(230,200,150,.08)'; x.lineWidth = 1; x.beginPath(); x.moveTo(C + Math.cos(a) * r0, C + Math.sin(a) * r0); x.lineTo(C + Math.cos(a) * r1, C + Math.sin(a) * r1); x.stroke(); }
+    for (let i = 0; i < 70; i++) { const yy = Math.random() * N; x.strokeStyle = `rgba(${Math.random() < .5 ? '40,24,12' : '220,190,140'},.06)`; x.lineWidth = 2 + Math.random() * 3; // saw marks
+      x.beginPath(); x.moveTo(0, yy); x.quadraticCurveTo(C, yy + 30, N, yy + 8); x.stroke(); }
+    const crack = (a, len, w) => { x.fillStyle = '#1a0f08'; x.beginPath(); x.moveTo(C + 14, C - 9);
+      for (let k = 1; k <= 8; k++) { const f = k / 8, aa = a + Math.sin(f * 9) * 0.04, r = len * f; x.lineTo(C + Math.cos(aa + 0.02) * r + 14 * (1 - f), C + Math.sin(aa + 0.02) * r - 9 * (1 - f)); }
+      for (let k = 8; k >= 1; k--) { const f = k / 8, aa = a + Math.sin(f * 9) * 0.04 - w * (1 - f * 0.8), r = len * f; x.lineTo(C + Math.cos(aa) * r + 14 * (1 - f), C + Math.sin(aa) * r - 9 * (1 - f)); }
+      x.fill(); };
+    crack(-0.6, C * 0.8, 0.04); crack(2.3, C * 0.45, 0.025); crack(3.6, C * 0.3, 0.02);
+    x.fillStyle = 'rgba(20,10,4,.45)'; x.beginPath(); x.arc(C + 14, C - 9, 7, 0, 7); x.fill(); // pith
+    x.restore();
+    ringPath(C * 0.86, 0.012, 0.5); x.strokeStyle = '#3a2416'; x.lineWidth = 4; x.stroke(); // cambium line
+    x.save(); x.beginPath(); x.arc(C, C, C, 0, 7); ringPath(C * 0.9, 0.01, 0); x.clip('evenodd'); // bark band over the bevel
+    x.fillStyle = '#3a281c'; x.fillRect(0, 0, N, N);
+    for (let i = 0; i < 900; i++) { const a = Math.random() * 7, r = C * (0.9 + Math.random() * 0.1); x.fillStyle = ['#271a12', '#4c3626', '#5e4532', '#33241a'][i % 4];
+      x.beginPath(); x.ellipse(C + Math.cos(a) * r, C + Math.sin(a) * r, 3 + Math.random() * 8, 2 + Math.random() * 3, a, 0, 7); x.fill(); }
+    x.restore();
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 8; return t; })();
+  const stumpBark = (() => { const c = document.createElement('canvas'); c.width = 2048; c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#2e2019'; x.fillRect(0, 0, 2048, 512);
+    for (let i = 0; i < 260; i++) { // raised bark plates between deep furrows
+      const px = Math.random() * 2048, py = Math.random() * 512, w = 14 + Math.random() * 26, h = 50 + Math.random() * 140;
+      x.fillStyle = ['#3e2c20', '#4a3527', '#43302a', '#523c2c'][i % 4]; x.beginPath(); x.ellipse(px, py, w / 2, h / 2, (Math.random() - .5) * 0.15, 0, 7); x.fill();
+      x.fillStyle = 'rgba(120,96,70,.18)'; x.beginPath(); x.ellipse(px - w * 0.15, py, w * 0.18, h * 0.42, 0, 0, 7); x.fill(); // moonlit plate tops
+    }
+    for (let i = 0; i < 420; i++) { x.strokeStyle = `rgba(16,10,6,${0.4 + Math.random() * 0.4})`; x.lineWidth = 1.5 + Math.random() * 3; // furrows
+      const px = Math.random() * 2048, py = Math.random() * 512; x.beginPath(); x.moveTo(px, py); x.bezierCurveTo(px + (Math.random() - .5) * 14, py + 30, px + (Math.random() - .5) * 14, py + 70, px + (Math.random() - .5) * 10, py + 100 + Math.random() * 80); x.stroke(); }
+    for (let i = 0; i < 1600; i++) { const yy = 512 - Math.pow(Math.random(), 2.2) * 300; // moss creeping up from the ground, a little lichen higher up
+      x.fillStyle = Math.random() < .8 ? `rgba(${60 + Math.random() * 30},${90 + Math.random() * 40},${50 + Math.random() * 20},.45)` : 'rgba(150,170,140,.4)';
+      x.beginPath(); x.arc(Math.random() * 2048, yy, 1 + Math.random() * 3.5, 0, 7); x.fill(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; return t; })();
+  const stumpSide = (() => { // bark sides, foot to the start of the bevel
+    const { A, HS } = ST, pos = [], uv = [], idx = [], y0 = ST.bot, y1 = ST.top - ST.bev;
+    for (let j = 0; j <= HS; j++) { const t = j / HS, y = y0 + (y1 - y0) * t;
+      for (let i = 0; i <= A; i++) { const a = i / A * Math.PI * 2, r = sideR(a % (Math.PI * 2), t);
+        pos.push(Math.cos(a) * r, y, Math.sin(a) * r); uv.push(i / A * 2, t); } }
+    for (let j = 0; j < HS; j++) for (let i = 0; i < A; i++) { const a = j * (A + 1) + i, b = a + A + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals(); return g; })();
+  const stumpTopGeo = (() => { // flat sawn face that rolls over a quarter-round bevel into the bark
+    const { A } = ST, RINGS = 14, BEV = 8, pos = [0, ST.top, 0], uv = [0.5, 0.5], idx = [];
+    for (let k = 1; k <= RINGS + BEV; k++) for (let i = 0; i <= A; i++) {
+      const a = i / A * Math.PI * 2, R = sideR(a % (Math.PI * 2), 1); let r, y, f;
+      if (k <= RINGS) { f = k / RINGS; r = (R - ST.bev) * f; y = ST.top; f *= 0.9; }
+      else { const q = (k - RINGS) / BEV * Math.PI / 2; r = R - ST.bev + Math.sin(q) * ST.bev; y = ST.top - (1 - Math.cos(q)) * ST.bev; f = 0.9 + 0.1 * (k - RINGS) / BEV; }
+      pos.push(Math.cos(a) * r, y, Math.sin(a) * r); uv.push(0.5 + 0.5 * f * Math.cos(a), 0.5 - 0.5 * f * Math.sin(a)); }
+    for (let i = 0; i < A; i++) idx.push(0, 1 + i + 1, 1 + i);
+    for (let k = 1; k < RINGS + BEV; k++) for (let i = 0; i < A; i++) { const a = 1 + (k - 1) * (A + 1) + i, b = a + A + 1; idx.push(a, a + 1, b, a + 1, b + 1, b); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals(); return g; })();
+  const stump = new THREE.Group(); scene.add(stump);
+  stump.add(new THREE.Mesh(stumpSide, new THREE.MeshStandardMaterial({ map: stumpBark, bumpMap: stumpBark, bumpScale: 0.03, roughness: 0.97 })));
+  stump.add(new THREE.Mesh(stumpTopGeo, new THREE.MeshStandardMaterial({ map: stumpCap, bumpMap: stumpCap, bumpScale: 0.006, roughness: 0.85 })));
+  // a few little toadstools tucked between the roots
+  const shroomCap = new THREE.MeshStandardMaterial({ color: 0xc94a3a, roughness: 0.6, emissive: 0x2a0806 }), shroomStem = new THREE.MeshStandardMaterial({ color: 0xeee0c8, roughness: 0.8 });
+  const dotTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 128; const x = c.getContext('2d'); x.fillStyle = '#c94a3a'; x.fillRect(0, 0, 256, 128);
+    x.fillStyle = '#fff3dc'; for (let i = 0; i < 18; i++) { x.beginPath(); x.arc(Math.random() * 256, Math.random() * 70, 4 + Math.random() * 6, 0, 7); x.fill(); } return new THREE.CanvasTexture(c); })();
+  shroomCap.map = dotTex; shroomCap.color.set(0xffffff);
+  [[1.0, 0.13, 0], [1.08, 0.09, 0.6], [0.93, 0.07, -0.4], [3.25, 0.11, 0.2], [3.33, 0.07, -0.5], [4.5, 0.08, 0.3]].forEach(([a, sz, tilt]) => {
+    const r = sideR(a, 0.2) + 0.12 + sz, m = new THREE.Group();
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(sz * 0.32, sz * 0.4, sz * 1.4, 12), shroomStem); stem.position.y = sz * 0.7; m.add(stem);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(sz, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), shroomCap); cap.scale.y = 0.7; cap.position.y = sz * 1.3; m.add(cap);
+    m.position.set(Math.cos(a) * r, GROUND - 0.55, Math.sin(a) * r); m.rotation.set(tilt * 0.25, a, tilt * 0.2); stump.add(m); });
   const grassTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
     x.fillStyle = '#141a22'; x.fillRect(0, 0, 512, 512);
     for (let i = 0; i < 2500; i++) { x.fillStyle = ['#18222a', '#1d2a28', '#121820', '#22302a'][i % 4]; x.fillRect(Math.random() * 512, Math.random() * 512, 2, 6 + Math.random() * 8); }
