@@ -39,8 +39,8 @@
   .stage { position: relative; min-height: 0; min-width: 0; }
   #stage { position: absolute; inset: 0; touch-action: none; }
   #stage canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
-  #stage.rotate canvas { cursor: grab; }
-  #stage.rotate canvas:active { cursor: grabbing; }
+  #stage.rotate canvas, #stage.carve:not(.over) canvas { cursor: grab; }
+  #stage.rotate canvas:active, #stage.carve:not(.over) canvas:active { cursor: grabbing; }
   .masthead { position: absolute; top: 20px; left: 24px; pointer-events: none; display: flex; flex-direction: column; gap: 4px; }
   h1 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 1.9rem; line-height: 1; color: var(--ink); }
   .eyebrow { margin: 0; font-size: .66rem; font-weight: 400; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); }
@@ -205,7 +205,7 @@
       <button class="icon-btn" id="zoomIn" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M16.5 16.5L21 21"/></svg></button>
       <button class="icon-btn wide" id="frontView" title="Turn the face toward you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M9 12h.01M15 12h.01M9 16q3 2 6 0"/></svg>Front view</button>
     </div>
-    <p class="hint" id="hint">Draw on the pumpkin to carve. Close a loop to cut a piece out.</p>
+    <p class="hint" id="hint">Draw on the pumpkin to carve. Drag beside it (or right-drag) to turn it.</p>
 
     <div class="coach" id="coach" hidden>
       <svg viewBox="0 0 84 70" aria-hidden="true">
@@ -309,35 +309,118 @@
 
   // ---------- scene ----------
   const scene = new THREE.Scene();
-  scene.background = (() => { // soft violet glow behind the pumpkin
-    const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
-    const g = x.createRadialGradient(256, 230, 10, 256, 260, 360);
-    g.addColorStop(0, '#6a4070'); g.addColorStop(0.2, '#4b2c74'); g.addColorStop(0.5, '#2e1c48'); g.addColorStop(1, '#1b1227');
-    x.fillStyle = g; x.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 26; i++) {
-      const bx = 60 + Math.random() * 392, by = 60 + Math.random() * 340, br = 1 + Math.random() * 2.5;
-      x.fillStyle = `rgba(${Math.random() < .6 ? '190,150,255' : '255,210,150'},${0.25 + Math.random() * 0.4})`;
-      x.beginPath(); x.arc(bx, by, br, 0, Math.PI * 2); x.fill();
-    }
-    return new THREE.CanvasTexture(c);
-  })();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+  scene.background = new THREE.Color(0x0b0818);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 60);
   camera.position.set(0, 0.85, 4.1);
 
-  const hemi = new THREE.HemisphereLight(0xc8a6e0, 0x3a2418, 0.45); scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xffbf78, 0.85); key.position.set(2.5, 3, 4); scene.add(key);
-  const halo = new THREE.PointLight(0xffc34a, 1.4, 4, 2); halo.position.set(0.4, 1.4, -1.6); scene.add(halo); // golden backlight
-  const floorGlow = new THREE.PointLight(0xffb040, 0.7, 2.6, 2); floorGlow.position.set(0, -0.1, 1.7); scene.add(floorGlow); // warm pool on the pedestal
-  const warm = new THREE.PointLight(0xffa048, 0.8, 6, 2); warm.position.set(-1.2, 0.6, 2.2); scene.add(warm);
-  const rimL = new THREE.DirectionalLight(0x9b7bff, 0.6); rimL.position.set(-4, 2, -3); scene.add(rimL);
-  const rimR = new THREE.DirectionalLight(0xc79bff, 0.55); rimR.position.set(4, 1.5, -3); scene.add(rimR);
+  // moonlit night: cool moonlight from above, a little warm fill so the pumpkin keeps its colour
+  const hemi = new THREE.HemisphereLight(0x8e8cd8, 0x2a1a14, 0.32); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffc488, 0.5); key.position.set(2.5, 3, 4); scene.add(key);
+  const moonLight = new THREE.DirectionalLight(0xaab8ff, 0.35); moonLight.position.set(-1.5, 4, -5); scene.add(moonLight);
+  const halo = new THREE.PointLight(0xffc34a, 0.6, 4, 2); halo.position.set(0.4, 1.4, -1.6); scene.add(halo); // golden backlight
+  const floorGlow = new THREE.PointLight(0xffb040, 0.35, 2.6, 2); floorGlow.position.set(0, -0.1, 1.7); scene.add(floorGlow);
+  const warm = new THREE.PointLight(0xffa048, 0.45, 6, 2); warm.position.set(-1.2, 0.6, 2.2); scene.add(warm);
+  const rimL = new THREE.DirectionalLight(0x8f86ff, 0.45); rimL.position.set(-4, 2, -3); scene.add(rimL);
+  const rimR = new THREE.DirectionalLight(0xb59bff, 0.4); rimR.position.set(4, 1.5, -3); scene.add(rimR);
 
   const GROUND = -0.7;
-  const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x22162f, roughness: 0.92, metalness: 0 });
-  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.36, 0.18, 96), pedestalMat);
-  pedestal.position.y = GROUND - 0.09; scene.add(pedestal);
-  const rimRing = new THREE.Mesh(new THREE.TorusGeometry(1.322, 0.01, 8, 128), new THREE.MeshBasicMaterial({ color: 0x4e3870 }));
-  rimRing.rotation.x = Math.PI / 2; rimRing.position.y = GROUND; scene.add(rimRing);
+  // the pumpkin sits on an old tree stump in a little night garden
+  const stumpTop = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#3e2c20'; x.fillRect(0, 0, 512, 512);
+    for (let r = 250; r > 4; r -= 7 + Math.random() * 9) { x.strokeStyle = `rgba(${Math.random() < .5 ? '28,18,12' : '92,70,48'},${0.35 + Math.random() * 0.3})`; x.lineWidth = 1.5 + Math.random() * 2;
+      x.beginPath(); x.ellipse(256 + (Math.random() - .5) * 6, 256 + (Math.random() - .5) * 6, r, r * 0.97, 0, 0, Math.PI * 2); x.stroke(); }
+    x.strokeStyle = 'rgba(30,18,10,.6)'; x.lineWidth = 3; x.beginPath(); x.moveTo(256, 250); x.lineTo(420, 140); x.stroke();
+    return new THREE.CanvasTexture(c); })();
+  const stumpBark = (() => { const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const x = c.getContext('2d');
+    x.fillStyle = '#35241c'; x.fillRect(0, 0, 1024, 128);
+    for (let i = 0; i < 500; i++) { x.strokeStyle = ['#2a1a12', '#4a3426', '#3e3a26', '#5a4232'][i % 4]; x.lineWidth = 2 + Math.random() * 6; x.globalAlpha = 0.6;
+      const px = Math.random() * 1024; x.beginPath(); x.moveTo(px, 0); x.lineTo(px + (Math.random() - .5) * 20, 128); x.stroke(); }
+    x.globalAlpha = 0.3; x.fillStyle = '#2c3a22'; // moss at the foot
+    for (let i = 0; i < 400; i++) { x.beginPath(); x.arc(Math.random() * 1024, 128 - Math.random() * Math.random() * 50, 1 + Math.random() * 3, 0, 7); x.fill(); }
+    return new THREE.CanvasTexture(c); })();
+  const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(1.32, 1.5, 0.55, 64, 1),
+    [new THREE.MeshStandardMaterial({ map: stumpBark, roughness: 0.95 }), new THREE.MeshStandardMaterial({ map: stumpTop, roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: 0x1a120c })]);
+  pedestal.position.y = GROUND - 0.275; scene.add(pedestal);
+  const grassTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#141a22'; x.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 2500; i++) { x.fillStyle = ['#18222a', '#1d2a28', '#121820', '#22302a'][i % 4]; x.fillRect(Math.random() * 512, Math.random() * 512, 2, 6 + Math.random() * 8); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10); return t; })();
+  const lawn = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }));
+  lawn.rotation.x = -Math.PI / 2; lawn.position.y = GROUND - 0.55; scene.add(lawn);
+
+  // painted panorama all the way round: moon, curly trees, a tiny haunted house, crooked fence, little tombstones
+  const PAN_R = 13, PAN_Y0 = GROUND - 0.56, PAN_H = 8;
+  const panorama = (() => {
+    const PW = 6144, PH = 630, c = document.createElement('canvas'); c.width = PW; c.height = PH; const x = c.getContext('2d');
+    const Y = wy => (PAN_Y0 + PAN_H - wy) / PAN_H * PH, U = PW / (2 * Math.PI * PAN_R); // world height -> canvas y; px per world unit
+    const sky = x.createLinearGradient(0, 0, 0, PH);
+    sky.addColorStop(0, '#0b0818'); sky.addColorStop(0.45, '#1a1236'); sky.addColorStop(0.8, '#2b2050'); sky.addColorStop(1, '#2e2448');
+    x.fillStyle = sky; x.fillRect(0, 0, PW, PH);
+    for (let i = 0; i < 700; i++) { // stars
+      const sy = Math.random() * Y(1.2); x.fillStyle = `rgba(${Math.random() < .7 ? '220,215,255' : '255,225,170'},${0.25 + Math.random() * 0.55})`;
+      x.beginPath(); x.arc(Math.random() * PW, sy, 0.6 + Math.random() * 1.4, 0, 7); x.fill();
+    }
+    const mx = PW * 0.5 + U * 2.6, my = Y(2.4), mr = U * 0.85; // moon, up and to the left of the pumpkin from the front
+    const glow = x.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5);
+    glow.addColorStop(0, 'rgba(200,190,255,.32)'); glow.addColorStop(1, 'rgba(200,190,255,0)');
+    x.fillStyle = glow; x.fillRect(mx - mr * 5, my - mr * 5, mr * 10, mr * 10);
+    const mg = x.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+    mg.addColorStop(0, '#fff6dc'); mg.addColorStop(1, '#e6d8b4'); x.fillStyle = mg; x.beginPath(); x.arc(mx, my, mr, 0, 7); x.fill();
+    x.fillStyle = 'rgba(190,170,140,.35)'; [[0.3, -0.2, 0.18], [-0.35, 0.25, 0.13], [0.1, 0.45, 0.1], [-0.2, -0.4, 0.08]].forEach(([a, b, r]) => { x.beginPath(); x.arc(mx + a * mr, my + b * mr, r * mr, 0, 7); x.fill(); });
+    const cloud = (cx, cy, w) => { x.fillStyle = 'rgba(70,60,120,.35)'; for (let i = 0; i < 6; i++) { x.beginPath(); x.ellipse(cx + (i - 2.5) * w * 0.18, cy + Math.sin(i * 2) * w * 0.03, w * 0.16, w * 0.06, 0, 0, 7); x.fill(); } };
+    for (let i = 0; i < 9; i++) cloud(Math.random() * PW, Y(2.6 + Math.random() * 2.5), U * (2 + Math.random() * 2));
+    cloud(mx + mr * 1.2, my + mr * 0.7, mr * 3);
+    // far hills
+    const hills = (col, base, amp, f, ph) => { x.fillStyle = col; x.beginPath(); x.moveTo(0, PH);
+      for (let px = 0; px <= PW; px += 16) x.lineTo(px, Y(base + amp * (Math.sin(px / PW * Math.PI * 2 * f + ph) * 0.6 + Math.sin(px / PW * Math.PI * 2 * f * 2.3 + ph * 2) * 0.4)));
+      x.lineTo(PW, PH); x.fill(); };
+    hills('#221a3e', 0.3, 0.45, 3, 1); // far ridge
+    // a tiny haunted house on the far hill, behind and right of the pumpkin from the front
+    const house = (hx, hy, s) => {
+      x.fillStyle = '#17112c';
+      x.fillRect(hx - s, hy - s * 1.2, s * 2, s * 1.2); x.beginPath(); x.moveTo(hx - s * 1.2, hy - s * 1.2); x.lineTo(hx - s * 0.1, hy - s * 2.4); x.lineTo(hx + s * 1.15, hy - s * 1.25); x.fill();
+      x.fillRect(hx + s * 0.4, hy - s * 2.6, s * 0.5, s * 1.6); x.beginPath(); x.moveTo(hx + s * 0.25, hy - s * 2.6); x.lineTo(hx + s * 0.65, hy - s * 3.3); x.lineTo(hx + s * 1.05, hy - s * 2.6); x.fill();
+      x.fillStyle = '#ffc860'; [[-0.6, -0.8], [0.2, -0.8], [0.55, -2.2]].forEach(([a, b]) => x.fillRect(hx + a * s, hy + b * s, s * 0.28, s * 0.3));
+      const wg = x.createRadialGradient(hx, hy - s, 0, hx, hy - s, s * 3); wg.addColorStop(0, 'rgba(255,190,90,.12)'); wg.addColorStop(1, 'rgba(255,190,90,0)'); x.fillStyle = wg; x.fillRect(hx - s * 3, hy - s * 4, s * 6, s * 6);
+    };
+    house(PW * 0.5 - U * 5.2, Y(0.6), U * 0.42);
+    hills('#1a1430', -0.2, 0.3, 5, 3);
+    // curly bare trees
+    const tree = (tx, s, lean) => {
+      x.strokeStyle = x.fillStyle = '#120d22'; x.lineCap = 'round';
+      const branch = (bx, by, ang, len, w, d) => {
+        const ex = bx + Math.cos(ang) * len, ey = by + Math.sin(ang) * len;
+        x.lineWidth = w; x.beginPath(); x.moveTo(bx, by); x.quadraticCurveTo(bx + Math.cos(ang + 0.4) * len * 0.5, by + Math.sin(ang + 0.4) * len * 0.5, ex, ey); x.stroke();
+        if (d > 3) { x.lineWidth = w * 0.7; x.beginPath(); x.arc(ex + Math.cos(ang + 1.6) * len * 0.12, ey + Math.sin(ang + 1.6) * len * 0.12, len * 0.12, ang - 1.5, ang + 3.5); x.stroke(); return; } // curly twig tips
+        branch(ex, ey, ang - 0.45 - Math.random() * 0.2, len * 0.72, w * 0.62, d + 1);
+        branch(ex, ey, ang + 0.4 + Math.random() * 0.2, len * 0.68, w * 0.62, d + 1);
+      };
+      branch(tx, Y(PAN_Y0 + 0.9), -Math.PI / 2 + lean, s, s * 0.16, 0);
+    };
+    [[-6.5, 1.5, -0.15], [-3.9, 1.0, 0.1], [7.5, 1.4, 0.12], [15, 1.2, -0.1], [22, 1.6, 0.05], [30, 1.1, -0.12], [-14, 1.3, 0.08], [-24, 1.5, -0.05]]
+      .forEach(([d, s, l]) => tree(PW * 0.5 + d * U, s * U, l));
+    hills('#130e24', -0.45, 0.18, 7, 5); // near bank
+    // little tombstones with soft moon-lit tops
+    const stone = (sx, s, tilt) => { const by = Y(PAN_Y0 + 0.62);
+      x.save(); x.translate(sx, by); x.rotate(tilt);
+      x.fillStyle = '#2c2648'; x.beginPath(); x.moveTo(-s * 0.4, 0); x.lineTo(-s * 0.4, -s * 0.6); x.arc(0, -s * 0.6, s * 0.4, Math.PI, 0); x.lineTo(s * 0.4, 0); x.fill();
+      x.fillStyle = 'rgba(170,160,230,.25)'; x.beginPath(); x.arc(0, -s * 0.6, s * 0.4, Math.PI * 1.1, Math.PI * 1.6); x.lineTo(0, -s * 0.6); x.fill();
+      x.strokeStyle = '#1a1530'; x.lineWidth = s * 0.07; x.beginPath(); x.moveTo(0, -s * 0.85); x.lineTo(0, -s * 0.4); x.moveTo(-s * 0.15, -s * 0.7); x.lineTo(s * 0.15, -s * 0.7); x.stroke();
+      x.restore(); };
+    [[-3, 0.7, -0.1], [-2.2, 0.55, 0.12], [3.1, 0.62, 0.08], [9, 0.7, -0.06], [-10, 0.6, 0.1], [17, 0.65, -0.12], [26, 0.55, 0.1], [-19, 0.7, 0.05]]
+      .forEach(([d, s, t]) => stone(PW * 0.5 + d * U, s * U, t));
+    // crooked picket fence along the front of the garden
+    for (let px = 0; px < PW; px += U * 0.36) {
+      const h = U * (0.55 + Math.sin(px * 0.013) * 0.08), tilt = Math.sin(px * 0.031) * 0.12, by = Y(PAN_Y0 + 0.08);
+      x.save(); x.translate(px, by); x.rotate(tilt); x.fillStyle = '#1e1832';
+      x.beginPath(); x.moveTo(-U * 0.07, 0); x.lineTo(-U * 0.07, -h); x.lineTo(0, -h - U * 0.1); x.lineTo(U * 0.07, -h); x.lineTo(U * 0.07, 0); x.fill(); x.restore();
+    }
+    x.fillStyle = '#1e1832'; x.fillRect(0, Y(PAN_Y0 + 0.42), PW, U * 0.06); x.fillRect(0, Y(PAN_Y0 + 0.2), PW, U * 0.06);
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.repeat.x = -1; t.anisotropy = 4; // drawn as seen from inside
+    return t;
+  })();
+  const pano = new THREE.Mesh(new THREE.CylinderGeometry(PAN_R, PAN_R, PAN_H, 96, 1, true), new THREE.MeshBasicMaterial({ map: panorama, side: THREE.BackSide, fog: false }));
+  pano.position.y = PAN_Y0 + PAN_H / 2; scene.add(pano);
 
   // ---------- carving textures (2:1, u around the pumpkin, v top to bottom) ----------
   const W = 2048, H = 1024;
@@ -513,7 +596,7 @@
   const pumpkin = new THREE.Group(); pumpkin.position.y = GROUND + 0.72; scene.add(pumpkin);
   const shellMat = new THREE.MeshStandardMaterial({
     map: colorTex, alphaMap: alphaTex, alphaTest: 0.5, emissiveMap: emitTex, emissive: 0xffffff, emissiveIntensity: 1,
-    bumpMap: bumpTex, bumpScale: 0.012, roughness: 0.42, metalness: 0,
+    bumpMap: bumpTex, bumpScale: 0.012, roughness: 0.5, metalness: 0,
   });
   const shell = new THREE.Mesh(pumpkinGeometry(1), shellMat); pumpkin.add(shell);
   // personality guide: dashed lines painted on a transparent skin just above the pumpkin
@@ -540,41 +623,40 @@
     for (let i = 0; i <= seg; i++) {
       const t = i / seg, r = r1 + (r0 - r1) * Math.pow(1 - t, 0.8) + flare * Math.exp(-t * 16); curve.getPointAt(t, c);
       for (let k = 0; k <= radial; k++) {
-        const n = i * (radial + 1) + k, ridge = 1 + 0.07 * Math.cos(k / radial * Math.PI * 12 + t * 10); // fibrous ridges that twist
+        const n = i * (radial + 1) + k, ridge = 1 + (0.06 + 0.06 * Math.exp(-t * 6)) * Math.cos(k / radial * Math.PI * 14 + t * 12); // fibrous ridges that twist, deepest at the base
         v.fromBufferAttribute(p, n).sub(c).multiplyScalar(r * ridge).add(c); p.setXYZ(n, v.x, v.y, v.z);
       }
     }
     geo.computeVertexNormals(); return geo;
   }
   const V = (x, y, z = 0) => new THREE.Vector3(x, y, z);
-  const barkTex = (() => { // twisted brown fibres, greener where the stem meets the pumpkin
-    const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const x = c.getContext('2d');
-    x.fillStyle = '#6a4724'; x.fillRect(0, 0, 1024, 128);
-    const cols = ['#8a6232', '#a37a40', '#4a3018', '#c49a5a', '#5a3a1a', '#7a5428'];
-    for (let i = 0; i < 1400; i++) {
-      x.strokeStyle = cols[(Math.random() * cols.length) | 0]; x.globalAlpha = 0.3 + Math.random() * 0.45; x.lineWidth = 0.8 + Math.random() * 3.5; x.lineCap = 'round';
-      const sx = Math.random() * 1200 - 160, sy = Math.random() * 128, len = 160 + Math.random() * 360;
-      x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + len / 2, sy + (Math.random() - 0.5) * 8, sx + len, sy + (Math.random() - 0.5) * 10); x.stroke();
+  const barkTex = (() => { // twisted brown fibres with green streaks running up from the base, like a fresh-cut stem
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 1024, 0);
+    g.addColorStop(0, '#6f7a30'); g.addColorStop(0.22, '#7a6a2c'); g.addColorStop(0.45, '#6e4a24'); g.addColorStop(1, '#5e3e1e');
+    x.fillStyle = g; x.fillRect(0, 0, 1024, 256);
+    const browns = ['#8a6232', '#a37a40', '#4a3018', '#c49a5a', '#5a3a1a', '#7a5428'], greens = ['#8fa040', '#6f8a30', '#a8b450', '#58702a'];
+    x.lineCap = 'round';
+    for (let i = 0; i < 1800; i++) {
+      const sx = Math.random() * 1200 - 160, green = Math.random() < Math.max(0.05, 0.85 - sx / 600);
+      x.strokeStyle = (green ? greens : browns)[(Math.random() * 4) | 0]; x.globalAlpha = 0.3 + Math.random() * 0.45; x.lineWidth = 0.8 + Math.random() * 4;
+      const sy = Math.random() * 256, len = 160 + Math.random() * 360;
+      x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + len / 2, sy + (Math.random() - 0.5) * 10, sx + len, sy + (Math.random() - 0.5) * 14); x.stroke();
     }
-    const base = x.createLinearGradient(0, 0, 200, 0); base.addColorStop(0, 'rgba(110,130,50,.75)'); base.addColorStop(1, 'rgba(110,130,50,0)');
-    x.globalAlpha = 1; x.fillStyle = base; x.fillRect(0, 0, 200, 128);
+    x.globalAlpha = 0.5; x.strokeStyle = '#2e1e0e'; x.lineWidth = 1.2; // dark grooves between fibres
+    for (let i = 0; i < 14; i++) { const y0 = i / 14 * 256; x.beginPath(); x.moveTo(0, y0); for (let px = 0; px <= 1024; px += 32) x.lineTo(px, y0 + Math.sin(px * 0.02 + i) * 4); x.stroke(); }
     return new THREE.CanvasTexture(c);
   })();
-  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.7 });
-  const vineMat = new THREE.MeshStandardMaterial({ color: 0x86a038, roughness: 0.55 });
+  const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: 0.68 });
+  const vineTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 32; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 0, 32); g.addColorStop(0, '#7a9a2a'); g.addColorStop(0.5, '#cada68'); g.addColorStop(1, '#7a9a2a');
+    x.fillStyle = g; x.fillRect(0, 0, 256, 32); x.fillStyle = 'rgba(80,110,30,.4)'; for (let i = 0; i < 40; i++) x.fillRect(Math.random() * 256, Math.random() * 32, 6, 1);
+    return new THREE.CanvasTexture(c); })();
+  const vineMat = new THREE.MeshStandardMaterial({ map: vineTex, roughness: 0.45 });
   // thick stem rising from the well, arching left into a big spiral hook
-  pumpkin.add(new THREE.Mesh(taperedTube([V(0, 0.48), V(0.06, 0.72), V(0.06, 0.92), V(-0.02, 1.1), V(-0.16, 1.24), V(-0.34, 1.29), V(-0.5, 1.22),
-    V(-0.57, 1.06), V(-0.52, 0.93), V(-0.41, 0.89), V(-0.32, 0.95), V(-0.32, 1.04), V(-0.39, 1.08), V(-0.44, 1.03)], 0.19, 0.024, 0.1, 160), barkMat));
-  function curl(start, end, turns, r, dir = 1) {
-    const pts = [start, start.clone().lerp(end, 0.5).add(V(0, 0.06))];
-    for (let i = 0; i <= 30; i++) { const t = i / 30, a = t * turns * Math.PI * 2, rr = r * (1 - t * 0.75); pts.push(V(end.x + dir * (Math.cos(a) * rr - r), end.y + Math.sin(a) * rr, end.z)); }
-    return pts;
-  }
-  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(0.14, 0.55, 0.04), V(0.5, 1.02, 0.08), 1.6, 0.07), 0.022, 0.007), vineMat));
-  pumpkin.add(new THREE.Mesh(taperedTube(curl(V(-0.12, 0.54, 0.08), V(-0.5, 0.7, 0.3), 1.2, 0.045, -1), 0.016, 0.005), vineMat));
+  pumpkin.add(new THREE.Mesh(taperedTube([V(0, 0.46), V(0.06, 0.72), V(0.06, 0.92), V(-0.02, 1.1), V(-0.16, 1.24), V(-0.34, 1.29), V(-0.5, 1.22),
+    V(-0.57, 1.06), V(-0.52, 0.93), V(-0.41, 0.89), V(-0.32, 0.95), V(-0.32, 1.04), V(-0.39, 1.08), V(-0.44, 1.03)], 0.19, 0.024, 0.13, 180, 20), barkMat));
 
-  // sepals: pointed green-brown flaps draped from the stem base (each vertex sits just above the surface)
-  const sepalMat = new THREE.MeshStandardMaterial({ map: barkTex, color: 0xb8c070, roughness: 0.7, side: THREE.DoubleSide });
   pumpkin.updateMatrixWorld(true);
   const down = new THREE.Raycaster(), from = new THREE.Vector3(), DOWN = V(0, -1, 0);
   function surfaceY(lx, lz) { // pumpkin-local height of the skin at (lx, lz)
@@ -582,20 +664,58 @@
     down.set(from, DOWN); const h = down.intersectObject(hitProxy)[0];
     return h ? pumpkin.worldToLocal(h.point.clone()).y : 0.5;
   }
-  for (let k = 0; k < 6; k++) {
-    const phi = k * Math.PI * 2 / 6 + Math.random() * 0.4, L = 0.26 + Math.random() * 0.1;
+
+  // leaf texture shared by the sheaths around the stem and the sepals on the skin: green with pale veins and dry brown tips
+  const leafTex = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 256, 0, 0); g.addColorStop(0, '#5e7a26'); g.addColorStop(0.55, '#8ea23e'); g.addColorStop(0.85, '#9a8a3a'); g.addColorStop(1, '#7a5a26');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 256);
+    x.strokeStyle = 'rgba(210,220,140,.55)'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(64, 256); x.lineTo(64, 0); x.stroke(); x.lineWidth = 1.2;
+    for (let v = 230; v > 20; v -= 26) { x.beginPath(); x.moveTo(64, v); x.quadraticCurveTo(40, v - 14, 6, v - 30); x.moveTo(64, v); x.quadraticCurveTo(88, v - 14, 122, v - 30); x.stroke(); }
+    x.fillStyle = 'rgba(60,80,20,.25)'; for (let i = 0; i < 120; i++) { x.beginPath(); x.arc(Math.random() * 128, Math.random() * 256, 1 + Math.random() * 3, 0, 7); x.fill(); }
+    return new THREE.CanvasTexture(c); })();
+  const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, roughness: 0.6, side: THREE.DoubleSide });
+
+  // sheaths: pointed leaves hugging the base of the stem and peeling outward at the tips
+  for (const [a0, h, peel] of [[0.3, 0.3, 0.14], [1.9, 0.22, 0.18], [3.5, 0.27, 0.12], [4.9, 0.2, 0.2]]) {
+    const g = new THREE.PlaneGeometry(1, 1, 6, 14), p = g.attributes.position, base = surfaceY(Math.cos(a0) * 0.3, Math.sin(a0) * 0.3) - 0.03;
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i), t = p.getY(i) + 0.5;
+      const w = 0.95 * Math.pow(1 - t, 0.75) * Math.min(1, 0.55 + t * 2.5); // angular half-width around the stem
+      const ang = a0 + u * w, r = 0.27 + peel * Math.pow(t, 1.6) + 0.012 * Math.cos(u * 6);
+      p.setXYZ(i, Math.cos(ang) * r, base + t * h, Math.sin(ang) * r);
+    }
+    g.computeVertexNormals(); pumpkin.add(new THREE.Mesh(g, leafMat));
+  }
+  // sepals: pointed flaps lying on the shoulder of the pumpkin around the stem (each vertex just above the surface)
+  for (let k = 0; k < 7; k++) {
+    const phi = k * Math.PI * 2 / 7 + Math.random() * 0.3, L = 0.24 + Math.random() * 0.12;
     const dir = V(Math.cos(phi), 0, Math.sin(phi)), side = V(-dir.z, 0, dir.x);
     const g = new THREE.PlaneGeometry(1, 1, 4, 10), p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
       const u = p.getX(i), t = p.getY(i) + 0.5;
-      const w = 0.42 * L * Math.pow(1 - t, 0.9) * Math.min(1, 0.6 + t * 3);
-      const pos = dir.clone().multiplyScalar(0.12 + t * L).addScaledVector(side, u * w);
-      const y = surfaceY(pos.x, pos.z) + 0.012 + 0.06 * (1 - t) * (1 - t) + Math.abs(u) * w * 0.3;
+      const w = 0.5 * L * Math.pow(1 - t, 0.9) * Math.min(1, 0.6 + t * 3);
+      const pos = dir.clone().multiplyScalar(0.16 + t * L).addScaledVector(side, u * w);
+      const y = surfaceY(pos.x, pos.z) + 0.014 + 0.05 * (1 - t) * (1 - t) + Math.abs(u) * w * 0.3 + 0.03 * t * t; // tips curl up a little
       p.setXYZ(i, pos.x, y, pos.z);
     }
-    g.computeVertexNormals();
-    pumpkin.add(new THREE.Mesh(g, sepalMat));
+    g.computeVertexNormals(); pumpkin.add(new THREE.Mesh(g, leafMat));
   }
+  // tendrils: thin vines that creep over the skin from the stem, then lift off into tight springy spirals
+  function tendril(phi, run, rise, turns, r, dir, lift = 0.02) {
+    const d = V(Math.cos(phi), 0, Math.sin(phi)), side = V(-d.z, 0, d.x), pts = [];
+    for (let i = 0; i <= 8; i++) { const t = i / 8, q = d.clone().multiplyScalar(0.18 + t * run).addScaledVector(side, Math.sin(t * 3) * 0.04);
+      q.y = surfaceY(q.x, q.z) + lift + t * t * rise * 0.4; pts.push(q); }
+    const end = pts[pts.length - 1], up = V(0, 1, 0);
+    for (let i = 1; i <= 40; i++) { // spiral: rises, then coils with a shrinking radius
+      const t = i / 40, a = t * turns * Math.PI * 2, rr = r * (1 - t * 0.7);
+      pts.push(end.clone().addScaledVector(d, 0.06 * t + dir * (1 - Math.cos(a)) * rr * 0.4).addScaledVector(side, Math.sin(a) * rr * dir).addScaledVector(up, rise * Math.min(1, t * 2.5) + (Math.cos(a) - 1) * rr * 0.6));
+    }
+    pumpkin.add(new THREE.Mesh(taperedTube(pts, 0.022, 0.008, 0, 220, 8), vineMat));
+  }
+  tendril(0.15, 0.32, 0.42, 2.6, 0.09, 1);     // the tall one on the right
+  tendril(2.5, 0.42, 0.14, 2, 0.07, -1);     // draped over the left shoulder
+  tendril(-1.2, 0.36, 0.18, 1.8, 0.045, 1);    // toward the back
+  tendril(1.25, 0.3, 0.12, 1.8, 0.055, -1, 0.015); // a short one at the front
 
   // candle + flame inside
   const candleMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.22, 20), new THREE.MeshStandardMaterial({ color: 0xf3e6c8, emissive: 0x553311, roughness: 0.6 }));
@@ -659,37 +779,47 @@
     for (const sys of [chunks, embers]) { sys.geo.attributes.position.needsUpdate = true; sys.geo.attributes.color.needsUpdate = true; }
   }
 
-  // ---------- ambient magic: dotted arcs, twinkling stars, drifting motes ----------
-  const starTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
-    const g = x.createRadialGradient(32, 32, 0, 32, 32, 22); g.addColorStop(0, 'rgba(255,240,200,.9)'); g.addColorStop(1, 'rgba(255,200,120,0)');
-    x.fillStyle = g; x.fillRect(0, 0, 64, 64); x.fillStyle = '#fff8e0';
-    x.beginPath(); x.moveTo(32, 2); x.quadraticCurveTo(35, 29, 62, 32); x.quadraticCurveTo(35, 35, 32, 62); x.quadraticCurveTo(29, 35, 2, 32); x.quadraticCurveTo(29, 29, 32, 2); x.fill();
+  // ---------- night life: friendly ghosts, bats and fireflies ----------
+  const ghostTex = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 160; const x = c.getContext('2d');
+    x.shadowColor = 'rgba(200,190,255,.8)'; x.shadowBlur = 14;
+    x.fillStyle = '#f2eeff'; x.beginPath(); x.moveTo(24, 140); x.lineTo(24, 64); x.arc(64, 64, 40, Math.PI, 0); x.lineTo(104, 140);
+    for (let i = 0; i < 4; i++) x.quadraticCurveTo(104 - i * 20 - 10, 124, 104 - (i + 1) * 20, 140);
+    x.fill(); x.shadowBlur = 0;
+    x.fillStyle = '#2a2140'; x.beginPath(); x.ellipse(50, 66, 6, 9, 0, 0, 7); x.ellipse(78, 66, 6, 9, 0, 0, 7); x.fill();
+    x.beginPath(); x.ellipse(64, 86, 5, 4, 0, 0, Math.PI); x.fill();
+    x.fillStyle = 'rgba(255,150,190,.55)'; x.beginPath(); x.ellipse(40, 82, 7, 4, 0, 0, 7); x.ellipse(88, 82, 7, 4, 0, 0, 7); x.fill();
     return new THREE.CanvasTexture(c); })();
-  const magic = new THREE.Group(); magic.position.y = GROUND + 0.85; scene.add(magic);
-  const arcs = [[1.55, new THREE.Euler(0.35, 0, 0.25)], [1.75, new THREE.Euler(-0.25, 0.6, -0.3)]];
-  const arcPts = [];
-  for (const [R, tilt] of arcs) for (let i = 0; i < 220; i++) {
-    const a = i / 220 * Math.PI * 2; if (Math.sin(3 * a + R) < -0.2) continue;
-    arcPts.push(V(R * Math.cos(a), 0, R * Math.sin(a)).applyEuler(tilt));
-  }
-  magic.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(arcPts),
-    new THREE.PointsMaterial({ size: 0.022, map: dot, color: 0xffd27a, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false })));
-  const stars = [];
-  for (let i = 0; i < 9; i++) {
-    const st = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTex, color: 0xffdc8a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-    st.position.copy(arcPts[(Math.random() * arcPts.length) | 0]); st.userData = { s: 0.07 + Math.random() * 0.07, ph: Math.random() * 6 };
-    magic.add(st); stars.push(st);
-  }
-  const moteGeo = new THREE.BufferGeometry(), moteN = 60, motePos = new Float32Array(moteN * 3);
-  for (let i = 0; i < moteN; i++) { motePos[i * 3] = (Math.random() - .5) * 6; motePos[i * 3 + 1] = GROUND + Math.random() * 3; motePos[i * 3 + 2] = (Math.random() - .5) * 5 - 0.5; }
-  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
-  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.04, map: dot, color: 0xc4a2ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
-  scene.add(motes);
+  const ghosts = [[0.95, 6.5, 1.2], [-0.75, 7.5, 2.0], [1.75, 7, 1.6], [-1.9, 8, 2.4]].map(([ang, r, y], i) => {
+    const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: ghostTex, color: 0xb8b0e0, transparent: true, opacity: 0.8, depthWrite: false }));
+    g.scale.set(0.55, 0.69, 1); g.userData = { ang, r, y, ph: i * 1.7 }; scene.add(g); return g;
+  });
+  const batTex = up => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d');
+    x.fillStyle = '#0c0816'; x.beginPath(); x.ellipse(64, 34, 9, 12, 0, 0, 7); x.fill();
+    x.beginPath(); x.moveTo(58, 24); x.lineTo(56, 14); x.lineTo(63, 22); x.moveTo(70, 24); x.lineTo(72, 14); x.lineTo(65, 22); x.fill();
+    const wy = up ? -18 : 14;
+    for (const s of [-1, 1]) { x.beginPath(); x.moveTo(64 + s * 6, 30); x.quadraticCurveTo(64 + s * 30, 30 + wy * 1.2, 64 + s * 58, 28 + wy);
+      x.quadraticCurveTo(64 + s * 46, 36 + wy * 0.4, 64 + s * 38, 40); x.quadraticCurveTo(64 + s * 26, 34, 64 + s * 8, 40); x.fill(); }
+    x.fillStyle = '#ffd27a'; x.fillRect(59, 30, 3, 3); x.fillRect(66, 30, 3, 3);
+    return new THREE.CanvasTexture(c); };
+  const batFrames = [batTex(true), batTex(false)];
+  const bats = [0, 1, 2].map(i => { const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: batFrames[0], transparent: true, depthWrite: false }));
+    b.scale.set(0.5, 0.25, 1); b.userData = { ph: i * 2.1, r: 6 + i * 1.2, sp: 0.18 + i * 0.05 }; scene.add(b); return b; });
+  const flyN = 46, flyGeo = new THREE.BufferGeometry(), flyPos = new Float32Array(flyN * 3), flyCol = new Float32Array(flyN * 3), flyHome = [];
+  for (let i = 0; i < flyN; i++) { const a = Math.random() * Math.PI * 2, r = 1.9 + Math.random() * 6;
+    flyHome.push([Math.cos(a) * r, GROUND - 0.4 + Math.random() * 1.8, Math.sin(a) * r, Math.random() * 10]); }
+  flyGeo.setAttribute('position', new THREE.BufferAttribute(flyPos, 3)); flyGeo.setAttribute('color', new THREE.BufferAttribute(flyCol, 3));
+  scene.add(new THREE.Points(flyGeo, new THREE.PointsMaterial({ size: 0.07, map: dot, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   function stepMagic(dt, now) {
-    magic.rotation.y += dt * 0.12;
-    stars.forEach(st => { const k = st.userData.s * (0.6 + 0.4 * Math.sin(now / 400 + st.userData.ph)); st.scale.set(k, k, 1); });
-    for (let i = 0; i < moteN; i++) { motePos[i * 3 + 1] += dt * 0.08; if (motePos[i * 3 + 1] > GROUND + 3) motePos[i * 3 + 1] = GROUND; }
-    moteGeo.attributes.position.needsUpdate = true;
+    const s = now / 1000;
+    ghosts.forEach(g => { const u = g.userData, a = u.ang + Math.sin(s * 0.13 + u.ph) * 0.35;
+      g.position.set(Math.sin(a) * u.r, u.y + Math.sin(s * 0.9 + u.ph) * 0.15, -Math.cos(a) * u.r); g.material.rotation = Math.sin(s * 0.7 + u.ph) * 0.08; });
+    bats.forEach(b => { const u = b.userData, a = s * u.sp * 2 + u.ph;
+      b.position.set(Math.sin(a) * u.r, 2.6 + Math.sin(a * 2) * 0.5, -Math.abs(Math.cos(a)) * u.r * 0.9 - 1);
+      b.material.map = batFrames[Math.floor(s * 7 + u.ph * 3) % 2]; });
+    for (let i = 0; i < flyN; i++) { const [hx, hy, hz, ph] = flyHome[i], j = i * 3;
+      flyPos[j] = hx + Math.sin(s * 0.5 + ph) * 0.3; flyPos[j + 1] = hy + Math.sin(s * 0.7 + ph * 2) * 0.2; flyPos[j + 2] = hz + Math.cos(s * 0.4 + ph) * 0.3;
+      const b = Math.pow(Math.max(0, Math.sin(s * 1.3 + ph * 3)), 3); flyCol[j] = 0.8 * b; flyCol[j + 1] = 1 * b; flyCol[j + 2] = 0.35 * b; }
+    flyGeo.attributes.position.needsUpdate = flyGeo.attributes.color.needsUpdate = true;
   }
 
   // ---------- controls + carving input ----------
@@ -739,7 +869,11 @@
     carveAt(hit, e.timeStamp);
   });
   let pending = null; // pointer moves are folded into one carve per frame
-  renderer.domElement.addEventListener('pointermove', e => { if (stroke) pending = { clientX: e.clientX, clientY: e.clientY, timeStamp: e.timeStamp }; });
+  let hover = null; // in Carve, the cursor shows a knife over the pumpkin and a hand beside it
+  renderer.domElement.addEventListener('pointermove', e => { const p = { clientX: e.clientX, clientY: e.clientY, timeStamp: e.timeStamp }; if (stroke) pending = p; else if (e.pointerType === 'mouse') hover = p; });
+  let dragging = false;
+  renderer.domElement.addEventListener('pointerdown', () => { dragging = true; }); addEventListener('pointerup', () => { dragging = false; });
+  function flushHover() { if (!hover || tool !== 'carve' || dragging) return; stage.classList.toggle('over', !!hitAt(hover)); hover = null; }
   function flushCarve() {
     if (!pending || !stroke) return;
     const e = pending; pending = null;
@@ -783,7 +917,8 @@
 
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.target.set(0, GROUND + 0.85, 0);
-  controls.enablePan = false; controls.enableDamping = true; controls.enableRotate = false;
+  controls.enablePan = false; controls.enableDamping = true;
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }; // right-drag turns it even over the pumpkin
   controls.minDistance = 2.8; controls.maxDistance = 7; controls.enableZoom = true; controls.maxPolarAngle = Math.PI / 2 - 0.08;
   controls.update();
 
@@ -831,7 +966,7 @@
 
   // ---------- tools ----------
   const HINTS = {
-    carve: 'Draw on the pumpkin to carve. Close a loop to cut a piece out.',
+    carve: 'Draw on the pumpkin to carve. Drag beside it (or right-drag) to turn it.',
     rotate: 'Drag to turn the pumpkin. Scroll or use the zoom buttons to look closer.',
   };
   function setTool(t) {
@@ -839,7 +974,6 @@
     stage.classList.toggle('carve', t === 'carve'); stage.classList.toggle('rotate', t === 'rotate');
     $('toolCarve').setAttribute('aria-pressed', t === 'carve');
     $('toolRotate').setAttribute('aria-pressed', t === 'rotate');
-    controls.enableRotate = t === 'rotate';
     if (!finished) $('hint').textContent = HINTS[t];
   }
   $('toolCarve').onclick = () => setTool('carve');
@@ -914,7 +1048,7 @@
   $('candle').onclick = () => { candle = !candle; $('candle').setAttribute('aria-checked', candle); };
 
   // ---------- finish: hide the tools, dim the room, let the candle catch ----------
-  const ROOM = [hemi, key, halo, floorGlow, warm, rimL, rimR].map(l => [l, l.intensity]);
+  const ROOM = [hemi, key, moonLight, halo, floorGlow, warm, rimL, rimR].map(l => [l, l.intensity]);
   let room = 1, roomTarget = 1, lit = 1, litFrom = 0, toolBefore = 'carve';
   function finish() {
     if (!items.length) return;
@@ -964,7 +1098,7 @@
   let prev = performance.now();
   renderer.setAnimationLoop(now => {
     const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
-    flushCarve();
+    flushCarve(); flushHover();
     if (texDirty) { alphaTex.needsUpdate = emitTex.needsUpdate = true; texDirty = false; }
     room += (roomTarget - room) * Math.min(1, dt * 2.5);
     for (const [l, b] of ROOM) l.intensity = b * room;
@@ -973,13 +1107,13 @@
     const flick = 0.85 + 0.09 * Math.sin(now / 90) + 0.05 * Math.sin(now / 37 + 1) + 0.04 * Math.sin(now / 13);
     const open = Math.min(1, carvedArea / 120000);
     const on = (candle ? 1 : 0) * lit, glow = finished ? 1.25 : 1;
-    innerLight.intensity = 1.2 * flick * on * glow;
-    spill.intensity = (1.4 * open * glow + 1.6 * cutFlash) * flick * on;
-    shellMat.emissiveIntensity = (0.6 * glow + 0.5 * cutFlash) * flick * on;
-    innerMat.emissive.setRGB(0.16 * flick * on, 0.05 * flick * on, 0.005 * on);
-    for (const m of wallMats) m.emissiveIntensity = 0.28 * m.userData.depth * flick * on * glow; // inner flesh catches the candle
+    innerLight.intensity = 0.75 * flick * on * glow;
+    spill.intensity = (0.8 * open * glow + 1.2 * cutFlash) * flick * on;
+    shellMat.emissiveIntensity = (0.4 * glow + 0.45 * cutFlash) * flick * on;
+    innerMat.emissive.setRGB(0.11 * flick * on, 0.035 * flick * on, 0.004 * on);
+    for (const m of wallMats) m.emissiveIntensity = 0.2 * m.userData.depth * flick * on * glow; // inner flesh catches the candle
     flame.visible = candle && lit > 0.02;
-    flame.scale.set(0.1 * flick * lit, 0.2 * (0.9 + 0.2 * Math.sin(now / 60)) * lit, 1);
+    flame.scale.set(0.085 * flick * lit, 0.2 * (0.9 + 0.2 * Math.sin(now / 60)) * lit, 1);
     stepParticles(dt); stepMagic(dt, now);
     stepFlight(now);
     controls.update();
