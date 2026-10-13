@@ -1374,7 +1374,7 @@
     const open = Math.min(1, carvedArea / 120000);
     const on = (candle ? 1 : 0) * lit, glow = finished ? 1.25 : 1;
     innerLight.intensity = 0.75 * flick * on * glow;
-    spill.intensity = (0.8 * open * glow + 1.2 * cutFlash) * flick * on;
+    spill.intensity = 0.8 * open * glow * flick * on; // no cut flash here: this light has no shadows, so it would flare through the pumpkin onto the stump
     shellMat.emissiveIntensity = (0.4 * glow + 0.45 * cutFlash) * flick * on;
     innerMat.emissive.setRGB(0.11 * flick * on, 0.035 * flick * on, 0.004 * on);
     for (const m of wallMats) m.emissiveIntensity = 0.2 * m.userData.depth * flick * on * glow; // inner flesh catches the candle
