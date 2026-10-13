@@ -1193,20 +1193,35 @@
   function flyTo(dir, dist, ms = 650) {
     flight = { a: camera.position.clone().sub(controls.target), b: dir.clone().normalize().multiplyScalar(dist), t0: performance.now(), ms };
   }
-  function stepFlight(now) {
+  function stepFlight(now) { // swing around the pumpkin the short way, even for a half turn
     if (!flight) return;
     const k = Math.min(1, (now - flight.t0) / flight.ms), e = k * k * (3 - 2 * k);
-    const da = flight.a.length(), db = flight.b.length();
-    const v = flight.a.clone().normalize().lerp(flight.b.clone().normalize(), e).normalize().multiplyScalar(da + (db - da) * e);
+    const sa = new THREE.Spherical().setFromVector3(flight.a), sb = new THREE.Spherical().setFromVector3(flight.b);
+    let dt = sb.theta - sa.theta; dt = Math.atan2(Math.sin(dt), Math.cos(dt));
+    const v = new THREE.Vector3().setFromSphericalCoords(sa.radius + (sb.radius - sa.radius) * e, sa.phi + (sb.phi - sa.phi) * e, sa.theta + dt * e);
     camera.position.copy(controls.target).add(v);
     if (k === 1) flight = null;
+  }
+  // where the carving actually is: the size-weighted average direction of every cut, from its spot on the skin texture
+  function faceDir() {
+    const sum = V(0, 0, 0), add = (x, y, w) => { const ph = x / W * Math.PI * 2, th = Math.min(Math.PI, Math.max(0, y / H * Math.PI));
+      sum.x += -Math.cos(ph) * Math.sin(th) * w; sum.y += Math.cos(th) * w; sum.z += Math.sin(ph) * Math.sin(th) * w; };
+    for (const it of items) {
+      if (it.t === 'poly' || it.t === 'cut') { let a = 0; it.pts.forEach(([x, y], i) => { const [x2, y2] = it.pts[(i + 1) % it.pts.length]; a += x * y2 - x2 * y; });
+        const w = Math.abs(a) / 2 / it.pts.length; it.pts.forEach(([x, y]) => add(x, y, w)); }
+      if (it.t === 'dabs') it.pts.forEach(([x, y, r]) => { const rr = r || it.r || 10; add(x, y, rr * rr); });
+    }
+    const flat = Math.hypot(sum.x, sum.z);
+    if (flat < 1e-6) return FRONT.clone(); // nothing carved yet, or only on the very top
+    const up = Math.max(0.12, Math.min(0.45, sum.y / Math.max(flat, 1e-6) * 0.6 + 0.15)); // look slightly down at it, never from below
+    return V(sum.x / flat, up, sum.z / flat).normalize();
   }
   const camDist = () => camera.position.distanceTo(controls.target);
   const camDir = () => camera.position.clone().sub(controls.target);
   const zoom = f => flyTo(camDir(), Math.min(controls.maxDistance, Math.max(controls.minDistance, camDist() * f)), 260);
   $('zoomIn').onclick = () => zoom(0.82);
   $('zoomOut').onclick = () => zoom(1.22);
-  $('frontView').onclick = () => flyTo(FRONT, camDist());
+  $('frontView').onclick = () => flyTo(faceDir(), camDist(), 800);
 
   // ---------- post: bloom ----------
   const composer = new THREE.EffectComposer(renderer);
@@ -1322,7 +1337,7 @@
     guide.visible = false; $('coach').hidden = true; $('toast').hidden = true;
     setTool('rotate'); $('hint').textContent = '';
     candle = true; $('candle').setAttribute('aria-checked', true);
-    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(FRONT, fitDist(0.95), 1200))); // after the panel folds away
+    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(faceDir(), fitDist(0.95), 1200))); // after the panel folds away
     roomTarget = 0.5; litFrom = performance.now() + 250;
     setTimeout(() => { if (finished) $('finale').hidden = false; }, 1500);
   }
