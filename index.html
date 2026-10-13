@@ -70,7 +70,9 @@
     padding: 8px 16px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line);
     text-align: center; font-size: .86rem; font-weight: 700; color: var(--ink); pointer-events: none;
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); text-wrap: balance;
+    transition: opacity .45s ease, transform .45s ease;
   }
+  .hint.gone { opacity: 0; transform: translate(-50%, 8px); }
 
   .view-tools { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; }
   .icon-btn {
@@ -257,7 +259,7 @@
     .view-tools { top: 10px; right: 10px; gap: 6px; }
     .icon-btn { width: 40px; height: 40px; }
     .icon-btn.wide { width: 40px; padding: 0; font-size: 0; gap: 0; }
-    .hint { bottom: 10px; font-size: .76rem; padding: 6px 12px; }
+    .hint { bottom: 10px; font-size: .74rem; padding: 5px 12px; white-space: nowrap; }
     .coach { left: 8px; right: 8px; bottom: 12px; width: auto; }
     .finale { bottom: 12px; padding: 12px; }
     .panel { padding: 12px; gap: 12px; max-height: 46vh; display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
@@ -1131,6 +1133,7 @@
     burst(hit.point, nrm, Math.min(3, pts.length));
   }
   // registered before OrbitControls so it can claim the drag first
+  renderer.domElement.addEventListener('pointerdown', () => hideHint()); // they've got it: get out of the way
   renderer.domElement.addEventListener('pointerdown', e => {
     if (tool !== 'carve' || finished || e.button > 0) return;
     const hit = hitAt(e);
@@ -1227,7 +1230,7 @@
   }
   const camDist = () => camera.position.distanceTo(controls.target);
   const camDir = () => camera.position.clone().sub(controls.target);
-  const zoom = f => flyTo(camDir(), Math.min(controls.maxDistance, Math.max(controls.minDistance, camDist() * f)), 260);
+  const zoom = f => (autoFit = false, flyTo(camDir(), Math.min(controls.maxDistance, Math.max(controls.minDistance, camDist() * f)), 260));
   $('zoomIn').onclick = () => zoom(0.82);
   $('zoomOut').onclick = () => zoom(1.22);
   $('frontView').onclick = () => flyTo(faceDir(), camDist(), 800);
@@ -1249,23 +1252,40 @@
     camera.updateProjectionMatrix();
   }
   addEventListener('resize', resize); resize();
-  // distance at which the whole pumpkin fits the stage, times a margin
-  const fitDist = m => { const vt = Math.tan(camera.fov * Math.PI / 360), ht = vt * camera.aspect;
-    return Math.min(controls.maxDistance, Math.max(controls.minDistance, (Math.max(1.35 / vt, 1.65 / ht) + 0.5) * m)); }; // + the pumpkin's near half
-  camera.position.copy(controls.target).addScaledVector(FRONT, fitDist(1.08));
-  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  // distance at which the pumpkin's body fills FILL of the view along whichever side is tighter (its silhouette is a sphere-ish
+  // outline, so it's r / sqrt(D² - r²) that has to equal the visible half-extent at distance D). m scales the result.
+  const FILL = 0.7, BODY_HALF_W = 1.34, BODY_HALF_H = 0.9;
+  const fitDist = (m = 1) => { const vt = Math.tan(camera.fov * Math.PI / 360), ht = vt * camera.aspect;
+    const need = (r, t) => r * Math.sqrt(1 + 1 / ((FILL * t) ** 2));
+    return Math.min(controls.maxDistance, Math.max(controls.minDistance, Math.max(need(BODY_HALF_W, ht), need(BODY_HALF_H, vt)) * m)); };
+  camera.position.copy(controls.target).addScaledVector(FRONT, fitDist());
+  // keep that framing when the stage changes size (phone rotation, panel layout settling) until the player zooms themselves
+  let autoFit = true;
+  const stopAutoFit = () => { autoFit = false; };
+  renderer.domElement.addEventListener('wheel', stopAutoFit, { passive: true });
+  renderer.domElement.addEventListener('touchstart', e => { if (e.touches.length > 1) stopAutoFit(); }, { passive: true });
+  const refit = () => { if (autoFit && !flight) camera.position.copy(controls.target).add(camDir().setLength(fitDist())); };
+  addEventListener('resize', refit);
+  if (window.ResizeObserver) new ResizeObserver(() => { resize(); refit(); }).observe(stage);
 
   // ---------- tools ----------
-  const HINTS = {
+  // touch screens get short one-line hints (no right-drag or scroll there)
+  const TOUCH = matchMedia('(pointer: coarse)').matches;
+  const HINTS = TOUCH ? { carve: 'Draw to carve · drag beside it to turn', rotate: 'Drag to turn · pinch to zoom' } : {
     carve: 'Draw on the pumpkin to carve. Drag beside it (or right-drag) to turn it.',
     rotate: 'Drag to turn the pumpkin. Scroll or use the zoom buttons to look closer.',
   };
+  // the hint shows briefly, then fades so it never sits over the carving; it comes back for a moment on a tool switch
+  let hintTimer = 0;
+  function flashHint(ms) { const h = $('hint'); if (finished) return; h.classList.remove('gone'); clearTimeout(hintTimer); hintTimer = setTimeout(() => h.classList.add('gone'), ms); }
+  const hideHint = () => { clearTimeout(hintTimer); $('hint').classList.add('gone'); };
+  $('hint').textContent = HINTS.carve;
   function setTool(t) {
     tool = t;
     stage.classList.toggle('carve', t === 'carve'); stage.classList.toggle('rotate', t === 'rotate');
     $('toolCarve').setAttribute('aria-pressed', t === 'carve');
     $('toolRotate').setAttribute('aria-pressed', t === 'rotate');
-    if (!finished) $('hint').textContent = HINTS[t];
+    if (!finished) { $('hint').textContent = HINTS[t]; flashHint(3000); }
   }
   $('toolCarve').onclick = () => setTool('carve');
   $('toolRotate').onclick = () => setTool('rotate');
@@ -1307,8 +1327,8 @@
   // ---------- coach ----------
   let coachSeen = false;
   try { coachSeen = localStorage.getItem('pp-coach') === '1'; } catch (e) {}
-  $('coach').hidden = coachSeen; $('hint').hidden = !coachSeen;
-  function dismissCoach() { $('coach').hidden = true; $('hint').hidden = false; try { localStorage.setItem('pp-coach', '1'); } catch (e) {} }
+  $('coach').hidden = coachSeen; $('hint').hidden = !coachSeen; if (coachSeen) flashHint(6000);
+  function dismissCoach() { const was = $('coach').hidden; $('coach').hidden = true; $('hint').hidden = false; if (!was) flashHint(4000); try { localStorage.setItem('pp-coach', '1'); } catch (e) {} }
   $('coachOk').onclick = dismissCoach;
 
   // ---------- face guides ----------
@@ -1348,7 +1368,7 @@
     guide.visible = false; $('coach').hidden = true; $('toast').hidden = true;
     setTool('rotate'); $('hint').textContent = '';
     candle = true; $('candle').setAttribute('aria-checked', true);
-    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(faceDir(), fitDist(0.95), 1200))); // after the panel folds away
+    requestAnimationFrame(() => requestAnimationFrame(() => flyTo(faceDir(), fitDist(0.92), 1200))); // after the panel folds away
     roomTarget = 0.5; litFrom = performance.now() + 250;
     setTimeout(() => { if (finished) $('finale').hidden = false; }, 1500);
   }
